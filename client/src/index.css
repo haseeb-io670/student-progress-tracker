@@ -1,0 +1,137 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white text-navy;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply relative overflow-hidden bg-orange text-white font-semibold px-6 py-3 rounded-md 
+    shadow-[0_5px_15px_rgba(244,149,35,0.4)] transition-all duration-300 
+    inline-flex items-center justify-center border border-transparent
+    hover:shadow-[0_8px_25px_rgba(244,149,35,0.6)] hover:translate-y-[-2px]
+    active:translate-y-[1px] active:shadow-[0_2px_10px_rgba(244,149,35,0.4)];
+  }
+  
+  .btn-primary::before {
+    @apply content-[''] absolute top-0 left-[-100%] w-full h-full 
+    bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-70 
+    transition-all duration-700 ease-in-out z-0;
+  }
+  
+  .btn-primary:hover::before {
+    @apply left-[100%];
+  }
+  
+  .btn-primary > * {
+    @apply relative z-10;
+  }
+  
+  .btn-secondary {
+    @apply relative overflow-hidden bg-transparent text-white font-semibold px-6 py-3 rounded-md
+    border border-orange/40 transition-all duration-300 
+    inline-flex items-center justify-center backdrop-blur-sm
+    hover:border-orange hover:bg-orange/10 hover:shadow-[0_0_15px_rgba(244,149,35,0.2)]
+    active:bg-orange/20;
+  }
+  
+  .btn-secondary::after {
+    @apply content-[''] absolute bottom-0 left-0 w-0 h-[2px] 
+    bg-orange transition-all duration-300 ease-out;
+  }
+  
+  .btn-secondary:hover::after {
+    @apply w-full;
+  }
+  
+  .btn-ghost {
+    @apply relative overflow-hidden bg-transparent text-white font-semibold px-6 py-3 rounded-md
+    border-2 border-dashed border-white/20 transition-all duration-300
+    inline-flex items-center justify-center
+    hover:border-solid hover:border-white/40 hover:bg-white/5
+    active:bg-white/10;
+  }
+  
+  .btn-ghost:hover {
+    @apply shadow-[0_0_20px_rgba(255,255,255,0.1)];
+  }
+  
+  .section-title {
+    @apply text-3xl md:text-4xl font-bold text-navy mb-6;
+  }
+
+  .section-subtitle {
+    @apply text-navy-light text-lg mb-8;
+  }
+
+  .card {
+    @apply bg-white rounded-lg p-6 hover:shadow-lg border border-navy/10 transition-shadow duration-300;
+  }
+}
+
+:root {
+  --primary-color: #0d1b38;     /* navy */
+  --primary-color-inner: #1a305e; /* navy light */
+  --secondary-color: #f49523;   /* orange */
+  --text-color: #fafcfa;        /* white */
+  --accent-color: #f49523;      /* orange */
+  --dark-grey: #071022;         /* navy dark */
+  --light-grey: #ffb860;        /* orange light */
+  --background-color: var(--text-color);
+}
+
+* {
+    font-family: 'Poppins';
+}
+
+.app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.main-content {
+    padding-top: 80px; /* Height of the navbar */
+    flex: 1;
+}
+
+.sections {
+    padding-top: 20vh;
+}
+
+.primary-color {
+    background: var(--primary-color);
+}
+
+.text-color {
+    color: var(--text-color);
+}
+
+.secondary-color {
+    background: var(--secondary-color);
+}
+
+.border-color {
+    border-color: var(--border-color);
+}
+
+.border-color-inner {
+    border-color: var(--border-color-inner);
+}
+
+.primary-color-inner {
+    background: var(--primary-color-inner);
+}
+
+.secondary-text-color {
+    color: var(--secondary-color);
+}
+
+.text-color-inner {
+    color: var(--text-color-inner);
+}
