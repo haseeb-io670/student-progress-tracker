@@ -16,7 +16,8 @@ const ProtectedRoute = ({ children, requiredRole }) => {
   }
 
   // If not logged in, redirect to login
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !currentUser) {
+    console.log('Not authenticated, redirecting to login...');
     return <Navigate to="/login" state={{ from: location.pathname }} />;
   }
 

@@ -22,7 +22,8 @@ const UserSchema = new mongoose.Schema({
   password: {
     type: String,
     required: [true, 'Please provide a password'],
-    minlength: [6, 'Password must be at least 6 characters']
+    minlength: [6, 'Password must be at least 6 characters'],
+    select: false // This ensures password isn't included in queries by default
   },
   role: {
     type: String,
@@ -61,9 +62,24 @@ UserSchema.pre('save', async function(next) {
 // Compare password method
 UserSchema.methods.comparePassword = async function(candidatePassword) {
   try {
-    return await bcrypt.compare(candidatePassword, this.password);
+    if (!this.password) {
+      console.error('No password hash stored for user');
+      return false;
+    }
+    if (!candidatePassword) {
+      console.error('No candidate password provided');
+      return false;
+    }
+    console.log('Comparing passwords:', {
+      candidatePassword,
+      hashedPassword: this.password.substring(0, 10) + '...' // Only log part of the hash for security
+    });
+    const isMatch = await bcrypt.compare(candidatePassword, this.password);
+    console.log('Password match:', isMatch);
+    return isMatch;
   } catch (error) {
-    throw new Error(error);
+    console.error('Password comparison error:', error);
+    return false; // Return false instead of throwing to avoid crashing
   }
 };
 

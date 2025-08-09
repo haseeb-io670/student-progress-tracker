@@ -18,10 +18,9 @@ const api = axios.create({
 const setAuthToken = (token) => {
   if (token) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    localStorage.setItem('token', token);
+    // We don't store the token in localStorage since we're using httpOnly cookies
   } else {
     delete api.defaults.headers.common['Authorization'];
-    localStorage.removeItem('token');
   }
 };
 
@@ -124,16 +123,22 @@ const getCurrentUser = async () => {
  * @returns {boolean} - True if user is logged in
  */
 const isLoggedIn = () => {
-  return !!localStorage.getItem('token');
+  // Check if we have a current user stored in memory
+  return api.defaults.headers.common['Authorization'] ? true : false;
 };
 
 /**
- * Get current user from local storage
- * @returns {Object|null} - User object or null
+ * Get current user by making an API call
+ * @returns {Promise<Object|null>} - User object or null
  */
-const getUser = () => {
-  const user = localStorage.getItem('user');
-  return user ? JSON.parse(user) : null;
+const getUser = async () => {
+  try {
+    const response = await api.get('/me');
+    return response.data.success ? response.data.data : null;
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    return null;
+  }
 };
 
 /**

@@ -25,7 +25,11 @@ const Login = () => {
       console.log('Login result:', result);
       
       if (result.success) {
-        navigate('/dashboard');
+        console.log('Login successful, navigating to dashboard...');
+        // Add a small delay to ensure state is updated
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 100);
       } else {
         setError(result.message || 'Invalid email or password');
       }

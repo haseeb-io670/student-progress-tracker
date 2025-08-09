@@ -1,7 +1,10 @@
 import jwt from 'jsonwebtoken';
 import { promisify } from 'util';
-// import config from '../config/config.js';
+import dotenv from 'dotenv';
 import ApiError from '../utils/ApiError.js';
+
+// Load environment variables
+dotenv.config();
 
 // Promisify JWT methods
 const verifyJwt = promisify(jwt.verify);
@@ -20,15 +23,15 @@ export const generateTokens = async (user) => {
         email: user.email,
         role: user.role 
       },
-      config.jwt.secret,
-      { expiresIn: `${config.jwt.accessExpirationMinutes}m` }
+      process.env.JWT_SECRET,
+      { expiresIn: `${process.env.JWT_ACCESS_EXPIRATION_MINUTES}m` }
     );
 
     // Create refresh token
     const refreshToken = jwt.sign(
       { userId: user._id || user.id },
-      config.jwt.secret,
-      { expiresIn: `${config.jwt.refreshExpirationDays}d` }
+      process.env.JWT_SECRET,
+      { expiresIn: `${process.env.JWT_REFRESH_EXPIRATION_DAYS}d` }
     );
 
     return { accessToken, refreshToken };
@@ -45,14 +48,16 @@ export const verifyToken = async (req, res, next) => {
     // Get token from different sources
     let token;
     
-    // Check Authorization header first
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
-    } 
-    // Then check cookies
-    else if (req.cookies && req.cookies.accessToken) {
+    // Check cookies first
+    if (req.cookies && req.cookies.accessToken) {
       token = req.cookies.accessToken;
+    }
+    // Fallback to Authorization header
+    else {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+      }
     }
     
     if (!token) {
@@ -60,7 +65,7 @@ export const verifyToken = async (req, res, next) => {
     }
     
     // Verify token
-    const decoded = await verifyJwt(token, config.jwt.secret);
+    const decoded = await verifyJwt(token, process.env.JWT_SECRET);
     
     // Add user data to request
     req.user = decoded;
@@ -123,7 +128,7 @@ export const optionalAuth = (req, res, next) => {
     }
     
     // Verify token
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Add user data to request
     req.user = decoded;

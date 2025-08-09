@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-
+import cookieParser from 'cookie-parser';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 // Import routes
@@ -16,9 +16,13 @@ const app = express();
 
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000', // Allow frontend
+  credentials: true // Allow cookies
+}));
+app.use(cookieParser());
 app.use(express.json());
-app.use(express.urlencoded());
+app.use(express.urlencoded({ extended: true }));
 
 // Security middleware
 app.use(helmet()); // Set secure HTTP headers

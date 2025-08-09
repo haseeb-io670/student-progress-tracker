@@ -43,33 +43,59 @@ const registerSchema = {
  */
 router.post('/login', validate(loginSchema), async (req, res, next) => {
   try {
+    console.log('Login attempt:', req.body);
     const { email, password } = req.body;
     
     // Find user by email
     const user = await User.findOne({ email }).select('+password');
+    console.log('User found:', user ? 'Yes' : 'No');
     
-    // Check if user exists and password is correct
-    if (!user || !(await user.comparePassword(password))) {
-      return unauthorizedResponse(res, 'Incorrect email or password');
+    // Check if user exists
+    if (!user) {
+      console.log('Login failed: User not found');
+      return unauthorizedResponse(res, 'Invalid email or password');
+    }
+
+    // Check password
+    const isPasswordValid = await user.comparePassword(password);
+    console.log('Password check:', { isValid: isPasswordValid });
+    
+    if (!isPasswordValid) {
+      console.log('Login failed: Invalid password');
+      return unauthorizedResponse(res, 'Invalid email or password');
     }
     
     try {
       // Generate tokens
       const { accessToken, refreshToken } = await generateTokens(user);
       
-      // Set refresh token in HTTP-only cookie
+      // Set access token in cookie
+      res.cookie('accessToken', accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 15 * 60 * 1000 // 15 minutes
+      });
+
+      // Set refresh token in cookie
       res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: parseInt(process.env.JWT_REFRESH_EXPIRATION_DAYS, 10) * 24 * 60 * 60 * 1000 // days to ms
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
       
       // Remove password from output
-      user.password = undefined;
+      const userData = user.toObject();
+      delete userData.password;
       
-      // Send response with access token and user data
-      return successResponse(res, { user, accessToken });
+      // Send response with user data
+      return res.status(200).json({
+        success: true,
+        data: {
+          user: userData
+        }
+      });
     } catch (error) {
       return serverErrorResponse(res, error);
     }
@@ -199,84 +225,7 @@ router.post('/logout', verifyToken, (req, res) => {
   }
 });
 
-/**
- * @route   POST /api/auth/register
- * @desc    Register a new user
- * @access  Public
- */
-router.post('/register', async (req, res) => {
-  try {
-    const { name, email, password, role = 'user' } = req.body;
-    
-    // Validate input
-    if (!name || !email || !password) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Please provide all required fields' 
-      });
-    }
-    
-    // Check if email already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Email already in use' 
-      });
-    }
-    
-    // Validate role
-    const validRoles = ['user', 'admin', 'super_admin'];
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Invalid role specified' 
-      });
-    }
-    
-    // Create new user (password will be hashed by the pre-save hook)
-    const newUser = new User({
-      name,
-      email,
-      password,
-      role
-    });
-    
-    // Save user to database
-    await newUser.save();
-    
-    // Generate JWT token
-    const token = generateToken(newUser);
-    
-    // Set token in cookie
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000
-    });
-    
-    // Return user info and token (excluding password)
-    res.status(201).json({
-      success: true,
-      data: {
-        user: {
-          id: newUser._id,
-          name: newUser.name,
-          email: newUser.email,
-          role: newUser.role,
-          children: newUser.children || []
-        },
-        token
-      }
-    });
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Server error during registration' 
-    });
-  }
-});
+
 
 /**
  * @route   GET /api/auth/me
@@ -368,14 +317,23 @@ router.post('/setup', async (req, res) => {
     
     await newUser.save();
     
-    // Generate JWT token
-    const token = generateToken(newUser);
+    // Generate tokens
+    const { accessToken, refreshToken } = await generateTokens(newUser);
     
-    // Set token in cookie
-    res.cookie('token', token, {
+    // Set access token in cookie
+    res.cookie('accessToken', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000 // 15 minutes
+    });
+
+    // Set refresh token in cookie
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
     
     res.status(201).json({
@@ -388,8 +346,7 @@ router.post('/setup', async (req, res) => {
           email: newUser.email,
           role: newUser.role,
           children: newUser.children || []
-        },
-        token
+        }
       }
     });
   } catch (error) {
