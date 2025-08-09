@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { promisify } from 'util';
-import config from '../config/config.js';
+// import config from '../config/config.js';
 import ApiError from '../utils/ApiError.js';
 
 // Promisify JWT methods

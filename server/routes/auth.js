@@ -4,7 +4,6 @@ import { generateTokens, verifyToken } from '../middleware/auth.js';
 import { User } from '../models/index.js';
 import { validate } from '../utils/validate.js';
 import ApiError from '../utils/ApiError.js';
-import config from '../config/config.js';
 import {
   successResponse,
   unauthorizedResponse,
@@ -63,7 +62,7 @@ router.post('/login', validate(loginSchema), async (req, res, next) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'strict',
-        maxAge: config.jwt.refreshExpirationDays * 24 * 60 * 60 * 1000 // days to ms
+        maxAge: parseInt(process.env.JWT_REFRESH_EXPIRATION_DAYS, 10) * 24 * 60 * 60 * 1000 // days to ms
       });
       
       // Remove password from output

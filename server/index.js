@@ -1,10 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { fileURLToPath } from 'url';
-import path from 'path';
-import config from './config/config.js';
 
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
 // Import routes
 import userRoutes from './routes/users.js';
 import studentRoutes from './routes/students.js';
@@ -14,13 +13,12 @@ import authRoutes from './routes/auth.js';
 
 // Initialize app
 const app = express();
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
 
 // Middleware
-app.use(cors(config.cors));
+app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded());
 
 // Security middleware
 app.use(helmet()); // Set secure HTTP headers
@@ -57,16 +55,15 @@ app.use((err, req, res, next) => {
 // }
 
 // Import database connection
-import connectDB from './config/db.js';
-
-// Connect to MongoDB and start server
-connectDB().then(() => {
-  app.listen(config.port, () => {
-    console.log(`Server running on port ${config.port}`);
+  const conn = await mongoose.connect('mongodb+srv://haseebsajjadio670:KdF.emgr9f-24Ec@cluster0.rvhaavj.mongodb.net/') .then(() => {
+    console.log('MongoDB connected successfully');
+    app.listen(5000, () => {
+      console.log(`Server running on port ${5000}`);
+    });
   });
-}).catch(err => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+// Connect to MongoDB and start server
+ 
+
+
 
 export default app;
