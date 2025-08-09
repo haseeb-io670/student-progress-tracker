@@ -1,60 +1,11 @@
-import { useState } from 'react';
-import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaPlus, FaEdit, FaTrash, FaSpinner } from 'react-icons/fa';
+import subjectService from '../services/subjectService';
 
 const SubjectManagement = () => {
-  const [subjects, setSubjects] = useState([
-    { 
-      id: 'biology', 
-      name: 'Biology',
-      units: [
-        { 
-          id: 1, 
-          name: 'Cell biology',
-          topics: [
-            { id: 1, name: 'Cell structure' },
-            { id: 2, name: 'Eukaryotes and prokaryotes' },
-            { id: 3, name: 'Animal and plant cells' }
-          ]
-        },
-        { 
-          id: 2, 
-          name: 'Organisation',
-          topics: [
-            { id: 1, name: 'Principles of organisation' },
-            { id: 2, name: 'Animal tissues, organs and organ systems' }
-          ]
-        }
-      ]
-    },
-    { 
-      id: 'chemistry', 
-      name: 'Chemistry',
-      units: [
-        { 
-          id: 1, 
-          name: 'Atomic structure and the periodic table',
-          topics: [
-            { id: 1, name: 'A simple model of the atom, symbols, relative atomic mass, electronic charge and isotopes' },
-            { id: 2, name: 'Atoms, elements and compounds' }
-          ]
-        }
-      ]
-    },
-    { 
-      id: 'physics', 
-      name: 'Physics',
-      units: [
-        { 
-          id: 1, 
-          name: 'Energy',
-          topics: [
-            { id: 1, name: 'Energy changes in a system, and the ways energy is stored before and after such changes' },
-            { id: 2, name: 'Energy stores and systems' }
-          ]
-        }
-      ]
-    }
-  ]);
+  const [subjects, setSubjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedUnit, setSelectedUnit] = useState(null);
@@ -74,85 +25,119 @@ const SubjectManagement = () => {
     setSelectedUnit(unit);
   };
   
-  const handleAddSubject = () => {
+    // Fetch subjects on component mount
+  useEffect(() => {
+    fetchSubjects();
+  }, []);
+
+  // Update selected subject and unit if they exist in the new data
+  useEffect(() => {
+    if (selectedSubject) {
+      const updatedSubject = subjects.find(s => s._id === selectedSubject._id);
+      setSelectedSubject(updatedSubject);
+      if (selectedUnit && updatedSubject) {
+        const updatedUnit = updatedSubject.units.find(u => u._id === selectedUnit._id);
+        setSelectedUnit(updatedUnit);
+      }
+    }
+  }, [subjects]);
+
+  const fetchSubjects = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await subjectService.getAllSubjects();
+      if (response.success) {
+        setSubjects(response.data);
+      }
+    } catch (err) {
+      setError(err.message || 'Error loading subjects');
+      console.error('Error fetching subjects:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddSubject = async () => {
     if (newSubject.name.trim() === '') return;
     
-    const id = newSubject.name.toLowerCase().replace(/\\s+/g, '-');
-    const subject = {
-      id,
-      name: newSubject.name,
-      units: []
-    };
-    
-    setSubjects([...subjects, subject]);
-    setNewSubject({ name: '' });
-    setIsAddingSubject(false);
+    try {
+      setError(null);
+      const response = await subjectService.createSubject({
+        name: newSubject.name
+      });
+      
+      if (response.success) {
+        await fetchSubjects();
+        setNewSubject({ name: '' });
+        setIsAddingSubject(false);
+      }
+    } catch (err) {
+      setError(err.message || 'Error adding subject');
+      console.error('Error adding subject:', err);
+    }
   };
   
-  const handleAddUnit = () => {
+  const handleAddUnit = async () => {
     if (newUnit.name.trim() === '' || !selectedSubject) return;
     
-    const unit = {
-      id: selectedSubject.units.length + 1,
-      name: newUnit.name,
-      topics: []
-    };
-    
-    const updatedSubjects = subjects.map(subject => {
-      if (subject.id === selectedSubject.id) {
-        return {
-          ...subject,
-          units: [...subject.units, unit]
-        };
+    try {
+      setError(null);
+      const response = await subjectService.addUnit(selectedSubject._id, {
+        name: newUnit.name
+      });
+      
+      if (response.success) {
+        await fetchSubjects();
+        setNewUnit({ name: '' });
+        setIsAddingUnit(false);
       }
-      return subject;
-    });
-    
-    setSubjects(updatedSubjects);
-    setSelectedSubject(updatedSubjects.find(s => s.id === selectedSubject.id));
-    setNewUnit({ name: '' });
-    setIsAddingUnit(false);
+    } catch (err) {
+      setError(err.message || 'Error adding unit');
+      console.error('Error adding unit:', err);
+    }
   };
   
-  const handleAddTopic = () => {
+  const handleAddTopic = async () => {
     if (newTopic.name.trim() === '' || !selectedSubject || !selectedUnit) return;
     
-    const topic = {
-      id: selectedUnit.topics.length + 1,
-      name: newTopic.name
-    };
-    
-    const updatedSubjects = subjects.map(subject => {
-      if (subject.id === selectedSubject.id) {
-        return {
-          ...subject,
-          units: subject.units.map(unit => {
-            if (unit.id === selectedUnit.id) {
-              return {
-                ...unit,
-                topics: [...unit.topics, topic]
-              };
-            }
-            return unit;
-          })
-        };
+    try {
+      setError(null);
+      const response = await subjectService.addTopic(
+        selectedSubject._id,
+        selectedUnit._id,
+        {
+          name: newTopic.name
+        }
+      );
+      
+      if (response.success) {
+        await fetchSubjects();
+        setNewTopic({ name: '' });
+        setIsAddingTopic(false);
       }
-      return subject;
-    });
-    
-    setSubjects(updatedSubjects);
-    setSelectedSubject(updatedSubjects.find(s => s.id === selectedSubject.id));
-    setSelectedUnit(
-      updatedSubjects
-        .find(s => s.id === selectedSubject.id)
-        .units.find(u => u.id === selectedUnit.id)
-    );
-    setNewTopic({ name: '' });
-    setIsAddingTopic(false);
+    } catch (err) {
+      setError(err.message || 'Error adding topic');
+      console.error('Error adding topic:', err);
+    }
   };
   
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <FaSpinner className="animate-spin h-8 w-8 text-indigo-600" />
+      </div>
+    );
+  }
+
   return (
     <div>
+      {error && (
+        <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded">
+          <p>{error}</p>
+        </div>
+      )}
+      
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold text-gray-900">Subject Management</h1>
         <button
@@ -171,8 +156,8 @@ const SubjectManagement = () => {
           <ul className="space-y-2">
             {subjects.map((subject) => (
               <li 
-                key={subject.id}
-                className={`p-2 rounded-md cursor-pointer flex justify-between items-center ${selectedSubject?.id === subject.id ? 'bg-indigo-100' : 'hover:bg-gray-100'}`}
+                key={subject._id}
+                className={`p-2 rounded-md cursor-pointer flex justify-between items-center ${selectedSubject?._id === subject._id ? 'bg-indigo-100' : 'hover:bg-gray-100'}`}
                 onClick={() => handleSelectSubject(subject)}
               >
                 <span>{subject.name}</span>
@@ -236,11 +221,11 @@ const SubjectManagement = () => {
               <ul className="space-y-2">
                 {selectedSubject.units.map((unit) => (
                   <li 
-                    key={unit.id}
-                    className={`p-2 rounded-md cursor-pointer flex justify-between items-center ${selectedUnit?.id === unit.id ? 'bg-indigo-100' : 'hover:bg-gray-100'}`}
+                    key={unit._id}
+                    className={`p-2 rounded-md cursor-pointer flex justify-between items-center ${selectedUnit?._id === unit._id ? 'bg-indigo-100' : 'hover:bg-gray-100'}`}
                     onClick={() => handleSelectUnit(unit)}
                   >
-                    <span>Unit {unit.id}: {unit.name}</span>
+                    <span>{unit.name}</span>
                     <div className="flex space-x-2">
                       <button className="text-indigo-600 hover:text-indigo-900">
                         <FaEdit />
@@ -307,27 +292,21 @@ const SubjectManagement = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        ID
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Topic Name
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {selectedUnit.topics.map((topic) => (
-                      <tr key={topic.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {topic.id}
-                        </td>
+                      <tr key={topic._id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {topic.name}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div className="flex space-x-2">
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex space-x-2 justify-end">
                             <button className="text-indigo-600 hover:text-indigo-900">
                               <FaEdit />
                             </button>
