@@ -1,10 +1,9 @@
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import helmet from 'helmet';
-
-// Load environment variables
-dotenv.config();
+import { fileURLToPath } from 'url';
+import path from 'path';
+import config from './config/config.js';
 
 // Import routes
 import userRoutes from './routes/users.js';
@@ -15,15 +14,11 @@ import authRoutes from './routes/auth.js';
 
 // Initialize app
 const app = express();
-const PORT = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
-}));
+app.use(cors(config.cors));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -66,8 +61,8 @@ import connectDB from './config/db.js';
 
 // Connect to MongoDB and start server
 connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  app.listen(config.port, () => {
+    console.log(`Server running on port ${config.port}`);
   });
 }).catch(err => {
   console.error('Failed to start server:', err);

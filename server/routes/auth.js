@@ -1,5 +1,4 @@
 import express from 'express';
-import bcrypt from 'bcrypt';
 import Joi from 'joi';
 import { generateTokens, verifyToken } from '../middleware/auth.js';
 import { User } from '../models/index.js';
@@ -9,7 +8,7 @@ import config from '../config/config.js';
 import {
   successResponse,
   unauthorizedResponse,
-  validationErrorResponse,
+  
   serverErrorResponse
 } from '../utils/response.js';
 
