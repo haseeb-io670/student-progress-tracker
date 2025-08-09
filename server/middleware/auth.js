@@ -1,52 +1,66 @@
 import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
+import { promisify } from 'util';
+import config from '../config/config.js';
+import ApiError from '../utils/ApiError.js';
 
-// Load environment variables
-dotenv.config();
+// Promisify JWT methods
+const verifyJwt = promisify(jwt.verify);
 
-// JWT secret key
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_change_this_in_production';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+/**
+ * Generate access and refresh tokens
+ * @param {Object} user - User object
+ * @returns {Object} Tokens object with access and refresh tokens
+ */
+export const generateTokens = async (user) => {
+  try {
+    // Create access token
+    const accessToken = jwt.sign(
+      { 
+        userId: user._id || user.id, 
+        email: user.email,
+        role: user.role 
+      },
+      config.jwt.secret,
+      { expiresIn: `${config.jwt.accessExpirationMinutes}m` }
+    );
 
-// Generate JWT token
-export const generateToken = (user) => {
-  return jwt.sign(
-    { 
-      userId: user._id || user.id, 
-      email: user.email,
-      role: user.role 
-    },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
-  );
+    // Create refresh token
+    const refreshToken = jwt.sign(
+      { userId: user._id || user.id },
+      config.jwt.secret,
+      { expiresIn: `${config.jwt.refreshExpirationDays}d` }
+    );
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(500, 'Error generating tokens');
+  }
 };
 
-// Verify JWT token middleware
-export const verifyToken = (req, res, next) => {
+/**
+ * Verify JWT token and attach user to request
+ */
+export const verifyToken = async (req, res, next) => {
   try {
     // Get token from different sources
     let token;
     
-    // Check Authorization header
+    // Check Authorization header first
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.split(' ')[1];
     } 
-    // Check cookies
-    else if (req.cookies && req.cookies.token) {
-      token = req.cookies.token;
+    // Then check cookies
+    else if (req.cookies && req.cookies.accessToken) {
+      token = req.cookies.accessToken;
     }
     
-    // If no token found
     if (!token) {
-      return res.status(401).json({ 
-        success: false,
-        message: 'Authentication failed: No token provided' 
-      });
+      return next(new ApiError(401, 'Authentication required'));
     }
     
     // Verify token
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = await verifyJwt(token, config.jwt.secret);
     
     // Add user data to request
     req.user = decoded;
@@ -115,7 +129,6 @@ export const optionalAuth = (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
-    // Continue without authentication if token is invalid
     next();
   }
 };

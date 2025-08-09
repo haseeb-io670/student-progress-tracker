@@ -1,9 +1,19 @@
 import { useAuth } from '../utils/AuthContext';
-import { FaUserGraduate, FaBook, FaUsers } from 'react-icons/fa';
+import { FaUserGraduate, FaBook, FaUsers, FaChartLine, FaCalendarAlt, FaBell } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
+  
+  // Get role display name
+  const getRoleDisplayName = (role) => {
+    switch (role) {
+      case 'super_admin': return 'Super Admin';
+      case 'admin': return 'Teacher';
+      case 'user': return 'Parent';
+      default: return role;
+    }
+  };
   
   // Mock data for dashboard stats
   const stats = [
@@ -11,25 +21,41 @@ const Dashboard = () => {
       id: 1,
       name: 'Students',
       value: '24',
-      icon: <FaUserGraduate className="h-6 w-6 text-indigo-600" />,
+      icon: <FaUserGraduate className="h-6 w-6 text-white" />,
       link: '/dashboard/student-progress',
-      roles: ['super_admin', 'admin', 'user']
+      roles: ['super_admin', 'admin', 'user'],
+      bgColor: 'from-indigo-500 to-indigo-600',
+      description: 'Total students in system'
     },
     {
       id: 2,
       name: 'Subjects',
       value: '12',
-      icon: <FaBook className="h-6 w-6 text-green-600" />,
+      icon: <FaBook className="h-6 w-6 text-white" />,
       link: '/dashboard/subject-management',
-      roles: ['super_admin', 'admin']
+      roles: ['super_admin', 'admin'],
+      bgColor: 'from-emerald-500 to-emerald-600',
+      description: 'Available subjects'
     },
     {
       id: 3,
       name: 'Users',
       value: '8',
-      icon: <FaUsers className="h-6 w-6 text-blue-600" />,
+      icon: <FaUsers className="h-6 w-6 text-white" />,
       link: '/dashboard/user-management',
-      roles: ['super_admin']
+      roles: ['super_admin'],
+      bgColor: 'from-blue-500 to-blue-600',
+      description: 'Total system users'
+    },
+    {
+      id: 4,
+      name: 'Progress Updates',
+      value: '152',
+      icon: <FaChartLine className="h-6 w-6 text-white" />,
+      link: '/dashboard/student-progress',
+      roles: ['super_admin', 'admin', 'user'],
+      bgColor: 'from-purple-500 to-purple-600',
+      description: 'Status updates this month'
     }
   ];
 
@@ -38,100 +64,190 @@ const Dashboard = () => {
     stat.roles.includes(currentUser?.role)
   );
 
+  // Recent activity data
+  const recentActivity = [
+    {
+      id: 1,
+      title: 'Student progress updated',
+      description: 'Aahil - Physics - Energy changes in a system',
+      status: 'New',
+      statusColor: 'bg-green-100 text-green-800',
+      time: 'Just now',
+      icon: <FaChartLine className="h-5 w-5 text-indigo-500" />
+    },
+    {
+      id: 2,
+      title: 'New unit added',
+      description: 'Chemistry - Unit 3: Chemical Analysis',
+      status: 'New',
+      statusColor: 'bg-green-100 text-green-800',
+      time: '2 hours ago',
+      icon: <FaBook className="h-5 w-5 text-emerald-500" />
+    },
+    {
+      id: 3,
+      title: 'Student added',
+      description: 'New student Sara added to system',
+      status: 'Complete',
+      statusColor: 'bg-blue-100 text-blue-800',
+      time: 'Yesterday',
+      icon: <FaUserGraduate className="h-5 w-5 text-blue-500" />
+    },
+    {
+      id: 4,
+      title: 'Parent meeting scheduled',
+      description: 'Meeting with John\'s parents',
+      status: 'Upcoming',
+      statusColor: 'bg-yellow-100 text-yellow-800',
+      time: 'Tomorrow, 3:00 PM',
+      icon: <FaCalendarAlt className="h-5 w-5 text-yellow-500" />
+    }
+  ];
+
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-      <p className="mt-1 text-sm text-gray-500">
-        Welcome back, {currentUser?.name}!
-      </p>
-
-      <div className="mt-6">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredStats.map((stat) => (
-            <Link
-              key={stat.id}
-              to={stat.link}
-              className="bg-white overflow-hidden shadow rounded-lg hover:shadow-md transition-shadow"
-            >
-              <div className="px-4 py-5 sm:p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    {stat.icon}
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dt className="text-sm font-medium text-gray-500 truncate">
-                      {stat.name}
-                    </dt>
-                    <dd className="flex items-baseline">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {stat.value}
-                      </div>
-                    </dd>
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ))}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Welcome back, <span className="font-medium text-gray-700">{currentUser?.name}</span>! 
+            <span className="hidden sm:inline"> You are logged in as {getRoleDisplayName(currentUser?.role)}.</span>
+          </p>
+        </div>
+        
+        <div className="mt-4 sm:mt-0">
+          <button className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+            <FaBell className="mr-2 h-4 w-4 text-indigo-500" />
+            Notifications
+          </button>
         </div>
       </div>
 
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        {filteredStats.map((stat) => (
+          <Link
+            key={stat.id}
+            to={stat.link}
+            className="bg-white overflow-hidden shadow-md rounded-lg hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1"
+          >
+            <div className="px-4 py-5 sm:p-6">
+              <div className="flex items-center">
+                <div className={`flex-shrink-0 rounded-md p-3 bg-gradient-to-br ${stat.bgColor} shadow-md`}>
+                  {stat.icon}
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dt className="text-sm font-medium text-gray-500 truncate">
+                    {stat.name}
+                  </dt>
+                  <dd className="flex items-baseline">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {stat.value}
+                    </div>
+                  </dd>
+                  <p className="text-xs text-gray-500 mt-1">{stat.description}</p>
+                </div>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {/* Recent Activity */}
       <div className="mt-8">
-        <h2 className="text-lg font-medium text-gray-900">Recent Activity</h2>
-        <div className="mt-2 bg-white shadow overflow-hidden sm:rounded-md">
+        <h2 className="text-lg font-semibold text-gray-900 flex items-center mb-4">
+          <span className="w-1 h-5 bg-indigo-600 rounded-full mr-2"></span>
+          Recent Activity
+        </h2>
+        <div className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-100">
           <ul className="divide-y divide-gray-200">
-            <li>
-              <div className="px-4 py-4 sm:px-6">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-indigo-600 truncate">
-                    Student progress updated
-                  </p>
-                  <div className="ml-2 flex-shrink-0 flex">
-                    <p className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                      New
-                    </p>
+            {recentActivity.map((activity) => (
+              <li key={activity.id} className="hover:bg-gray-50 transition-colors">
+                <div className="px-4 py-4 sm:px-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 mr-3">
+                        {activity.icon}
+                      </div>
+                      <p className="text-sm font-medium text-indigo-600 truncate">
+                        {activity.title}
+                      </p>
+                    </div>
+                    <div className="ml-2 flex-shrink-0 flex">
+                      <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${activity.statusColor}`}>
+                        {activity.status}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2 sm:flex sm:justify-between">
+                    <div className="sm:flex">
+                      <p className="flex items-center text-sm text-gray-500">
+                        {activity.description}
+                      </p>
+                    </div>
+                    <div className="mt-2 flex items-center text-xs text-gray-500 sm:mt-0">
+                      <p>
+                        {activity.time}
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div className="mt-2 sm:flex sm:justify-between">
-                  <div className="sm:flex">
-                    <p className="flex items-center text-sm text-gray-500">
-                      Aahil - Physics
-                    </p>
-                  </div>
-                  <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                    <p>
-                      Just now
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </li>
-            <li>
-              <div className="px-4 py-4 sm:px-6">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-indigo-600 truncate">
-                    New unit added
-                  </p>
-                  <div className="ml-2 flex-shrink-0 flex">
-                    <p className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                      New
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-2 sm:flex sm:justify-between">
-                  <div className="sm:flex">
-                    <p className="flex items-center text-sm text-gray-500">
-                      Chemistry - Unit 3
-                    </p>
-                  </div>
-                  <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                    <p>
-                      2 hours ago
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </li>
+              </li>
+            ))}
           </ul>
+          <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 text-center">
+            <button className="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
+              View all activity
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mt-8">
+        <h2 className="text-lg font-semibold text-gray-900 flex items-center mb-4">
+          <span className="w-1 h-5 bg-indigo-600 rounded-full mr-2"></span>
+          Quick Actions
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link 
+            to="/dashboard/student-progress"
+            className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg border border-gray-100 transition-all duration-200 flex flex-col items-center justify-center text-center"
+          >
+            <FaUserGraduate className="h-8 w-8 text-indigo-500 mb-3" />
+            <h3 className="font-medium text-gray-900">View Progress</h3>
+            <p className="text-xs text-gray-500 mt-1">Check student progress</p>
+          </Link>
+          
+          {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
+            <Link 
+              to="/dashboard/subject-management"
+              className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg border border-gray-100 transition-all duration-200 flex flex-col items-center justify-center text-center"
+            >
+              <FaBook className="h-8 w-8 text-emerald-500 mb-3" />
+              <h3 className="font-medium text-gray-900">Manage Subjects</h3>
+              <p className="text-xs text-gray-500 mt-1">Add or edit subjects</p>
+            </Link>
+          )}
+          
+          {currentUser?.role === 'super_admin' && (
+            <Link 
+              to="/dashboard/user-management"
+              className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg border border-gray-100 transition-all duration-200 flex flex-col items-center justify-center text-center"
+            >
+              <FaUsers className="h-8 w-8 text-blue-500 mb-3" />
+              <h3 className="font-medium text-gray-900">Manage Users</h3>
+              <p className="text-xs text-gray-500 mt-1">Add or edit users</p>
+            </Link>
+          )}
+          
+          <div 
+            className="bg-white p-4 rounded-lg shadow-md hover:shadow-lg border border-gray-100 transition-all duration-200 flex flex-col items-center justify-center text-center cursor-pointer"
+          >
+            <FaCalendarAlt className="h-8 w-8 text-purple-500 mb-3" />
+            <h3 className="font-medium text-gray-900">Calendar</h3>
+            <p className="text-xs text-gray-500 mt-1">View upcoming events</p>
+          </div>
         </div>
       </div>
     </div>

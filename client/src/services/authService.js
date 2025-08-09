@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// API base URL
+
 const API_URL = '/api/auth';
 
 // Create axios instance
@@ -13,8 +13,7 @@ const api = axios.create({
 });
 
 /**
- * Set the authorization header for all requests
- * @param {string} token - JWT token
+ * @param {string} token ken
  */
 const setAuthToken = (token) => {
   if (token) {
@@ -35,6 +34,26 @@ const setAuthToken = (token) => {
 const login = async (email, password) => {
   try {
     const response = await api.post('/login', { email, password });
+    
+    if (response.data.success && response.data.data.token) {
+      setAuthToken(response.data.data.token);
+      localStorage.setItem('user', JSON.stringify(response.data.data.user));
+    }
+    
+    return response.data;
+  } catch (error) {
+    throw error.response ? error.response.data : { success: false, message: 'Network error' };
+  }
+};
+
+/**
+ * Setup first admin user
+ * @param {Object} userData - User setup data
+ * @returns {Promise} - Response with user data and token
+ */
+const setup = async (userData) => {
+  try {
+    const response = await api.post('/setup', userData);
     
     if (response.data.success && response.data.data.token) {
       setAuthToken(response.data.data.token);
@@ -133,6 +152,7 @@ initAuth();
 const authService = {
   login,
   register,
+  setup,
   logout,
   getCurrentUser,
   isLoggedIn,

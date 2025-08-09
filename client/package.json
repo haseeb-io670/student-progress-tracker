@@ -1,5 +1,5 @@
 {
-  "name": "balitech-client",
+  "name": "imedia5-client",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "axios": "^1.11.0",
     "framer-motion": "^12.11.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom';
 import App from '../App';
 import Login from '../pages/Login';
 import Register from '../pages/Register';
+import Setup from '../pages/Setup';
 import Dashboard from '../pages/Dashboard';
 import StudentProgress from '../pages/StudentProgress';
 import SubjectManagement from '../pages/SubjectManagement';
@@ -31,6 +32,10 @@ const router = createBrowserRouter([
     element: <Register />
   },
   {
+    path: '/setup',
+    element: <Setup />
+  },
+  {
     path: '/dashboard',
     element: (
       <ProtectedRoute>
@@ -44,15 +49,27 @@ const router = createBrowserRouter([
       },
       {
         path: 'student-progress',
-        element: <StudentProgress />
+        element: (
+          <ProtectedRoute>
+            <StudentProgress />
+          </ProtectedRoute>
+        )
       },
       {
         path: 'subject-management',
-        element: <SubjectManagement />
+        element: (
+          <ProtectedRoute requiredRole={['super_admin', 'admin']}>
+            <SubjectManagement />
+          </ProtectedRoute>
+        )
       },
       {
         path: 'user-management',
-        element: <UserManagement />
+        element: (
+          <ProtectedRoute requiredRole="super_admin">
+            <UserManagement />
+          </ProtectedRoute>
+        )
       }
     ]
   },

@@ -1,43 +1,75 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../utils/AuthContext';
-import { FaSpinner } from 'react-icons/fa';
+import { FaSpinner, FaUserCog } from 'react-icons/fa';
 
-const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+const Setup = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { setup } = useAuth();
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
+    // Validate passwords match
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setIsLoading(false);
+      return;
+    }
+
+    // Validate password length
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      console.log('Attempting login with email:', email);
+      console.log('Submitting setup data:', {
+        name: formData.name,
+        email: formData.email,
+        password: '********' // Don't log actual password
+      });
       
-      // Use the JWT authentication service
-      const result = await login(email, password);
+      const result = await setup({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password
+      });
       
-      console.log('Login result:', result);
+      console.log('Setup result:', result);
       
       if (result.success) {
         navigate('/dashboard');
       } else {
-        setError(result.message || 'Invalid email or password');
+        setError(result.message || 'Setup failed');
       }
     } catch (err) {
-      console.error('Login error details:', err);
+      console.error('Setup error details:', err);
       
       if (err.message) {
         setError(`Error: ${err.message}`);
       } else if (typeof err === 'string') {
         setError(`Error: ${err}`);
       } else {
-        setError('An unknown error occurred during login. Please try again.');
+        setError('An unknown error occurred during setup. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -71,11 +103,14 @@ const Login = () => {
         <div className="max-w-md w-full">
           <div className="bg-white rounded-xl shadow-xl overflow-hidden p-6 sm:p-8 border border-gray-100">
             <div className="text-center mb-8">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mb-4">
+                <FaUserCog className="h-8 w-8 text-white" />
+              </div>
               <h2 className="text-3xl font-extrabold text-gray-900 mb-2">
-                Welcome Back
+                Welcome to Student Progress
               </h2>
               <p className="text-sm text-gray-600">
-                Sign in to access your account
+                Set up your administrator account to get started
               </p>
             </div>
             
@@ -97,63 +132,74 @@ const Login = () => {
               
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="email-address" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={handleChange}
+                    className="appearance-none block w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="Enter your full name"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                     Email address
                   </label>
-                  <div className="relative">
-                    <input
-                      id="email-address"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="appearance-none block w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      placeholder="Enter your email"
-                      disabled={isLoading}
-                    />
-                  </div>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="appearance-none block w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="Enter your email"
+                    disabled={isLoading}
+                  />
                 </div>
                 
                 <div>
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                     Password
                   </label>
-                  <div className="relative">
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="appearance-none block w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      placeholder="Enter your password"
-                      disabled={isLoading}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
                   <input
-                    id="remember-me"
-                    name="remember-me"
-                    type="checkbox"
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    id="password"
+                    name="password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="appearance-none block w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="Create a password"
+                    disabled={isLoading}
                   />
-                  <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
-                    Remember me
-                  </label>
                 </div>
 
-                <div className="text-sm">
-                  <a href="#" className="font-medium text-indigo-600 hover:text-indigo-500">
-                    Forgot password?
-                  </a>
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    className="appearance-none block w-full px-3 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    placeholder="Confirm your password"
+                    disabled={isLoading}
+                  />
                 </div>
               </div>
 
@@ -166,34 +212,20 @@ const Login = () => {
                   {isLoading ? (
                     <>
                       <FaSpinner className="animate-spin -ml-1 mr-2 h-5 w-5" />
-                      Signing in...
+                      Setting up...
                     </>
                   ) : (
-                    'Sign in'
+                    'Complete Setup'
                   )}
                 </button>
               </div>
-              
-              <div className="text-center mt-4">
-                <p className="text-sm text-gray-600">
-                  Don't have an account?{' '}
-                  <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-                    Create one now
-                  </Link>
+
+              <div className="text-center">
+                <p className="text-xs text-gray-500">
+                  This will create your Super Administrator account with full access to all features.
                 </p>
               </div>
             </form>
-            
-            <div className="mt-8 border-t border-gray-200 pt-6">
-              <div className="text-center">
-                <p className="text-sm text-gray-600">
-                  Need to set up the system?{' '}
-                  <Link to="/setup" className="font-medium text-indigo-600 hover:text-indigo-500">
-                    First-time setup
-                  </Link>
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -210,4 +242,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default Setup;
