@@ -1,6 +1,12 @@
 import mongoose from 'mongoose';
 
 const SubjectSchema = new mongoose.Schema({
+  id: {
+    type: String,
+    required: true,
+    trim: true,
+    unique: true
+  },
   name: {
     type: String,
     required: [true, 'Please provide a subject name'],

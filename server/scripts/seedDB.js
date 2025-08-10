@@ -84,17 +84,14 @@ const seedDatabase = async () => {
 
     // Create subjects
     const biology = await Subject.create({
-      id: 'biology',
       name: 'Biology'
     });
 
     const chemistry = await Subject.create({
-      id: 'chemistry',
       name: 'Chemistry'
     });
 
     const physics = await Subject.create({
-      id: 'physics',
       name: 'Physics'
     });
 

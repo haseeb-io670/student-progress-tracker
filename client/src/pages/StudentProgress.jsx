@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../utils/AuthContext';
-import { FaEdit, FaPlus, FaSave, FaTimes, FaLock } from 'react-icons/fa';
+import { FaEdit, FaPlus, FaSave, FaTimes, FaLock, FaBook } from 'react-icons/fa';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const StudentProgress = () => {
@@ -12,52 +13,166 @@ const StudentProgress = () => {
   const [editingTopicId, setEditingTopicId] = useState(null);
   const [editingStatus, setEditingStatus] = useState('');
   
-  // Mock data for students
-  const allStudents = [
-    { id: 'aahil', name: 'Aahil' },
-    { id: 'sara', name: 'Sara' },
-    { id: 'john', name: 'John' }
-  ];
-  
-  // Filter students based on user role
+  // State for students data
+  const [allStudents, setAllStudents] = useState([]);
   const [availableStudents, setAvailableStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Fetch students data
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        setLoading(true);
+        let studentsData = [];
+        
+        if (currentUser?.role === 'user') {
+          // For parents, fetch only their children
+          const response = await axios.get('/api/users/me/children');
+          studentsData = response.data;
+        } else if (currentUser?.role === 'admin' || currentUser?.role === 'super_admin') {
+          // For admins, fetch all students
+          const response = await axios.get('/api/students');
+          studentsData = response.data;
+        } else {
+          // Not authenticated or unknown role
+          navigate('/login');
+          return;
+        }
+        
+        setAllStudents(studentsData);
+        setAvailableStudents(studentsData);
+        
+        // Set initial selected student if none is selected
+        if ((!selectedStudent || selectedStudent === '') && studentsData.length > 0) {
+          setSelectedStudent(studentsData[0]._id);
+        }
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching students:', err);
+        setError('Failed to load students data');
+        setLoading(false);
+      }
+    };
+    
+    if (currentUser) {
+      fetchStudents();
+    }
+  }, [currentUser, navigate, selectedStudent]);
+  
+  // State for subjects data
+  const [subjects, setSubjects] = useState([]);
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [showUnitModal, setShowUnitModal] = useState(false);
+  const [showTopicModal, setShowTopicModal] = useState(false);
+  const [newSubjectName, setNewSubjectName] = useState('');
+  const [newUnitName, setNewUnitName] = useState('');
+  const [newTopicName, setNewTopicName] = useState('');
+  const [editingSubject, setEditingSubject] = useState(null);
+  
+  // Fetch subjects data
+  const fetchSubjects = async () => {
+    try {
+      const response = await axios.get('/api/subjects');
+      // Check if response has data property and it's an array
+      const subjectsData = response.data?.data || [];
+      setSubjects(subjectsData);
+      
+      // Set initial selected subject if none is selected
+      if (!selectedSubject && subjectsData.length > 0) {
+        setSelectedSubject(subjectsData[0]._id);
+      }
+    } catch (err) {
+      console.error('Error fetching subjects:', err);
+      setError('Failed to load subjects data');
+    }
+  };
   
   useEffect(() => {
-    // If user is a parent, only show their children
-    if (currentUser?.role === 'user' && currentUser?.children) {
-      const parentStudents = allStudents.filter(student => 
-        currentUser.children.includes(student.id)
-      );
-      
-      setAvailableStudents(parentStudents);
-      
-      // If no students available or selected student is not a child of this parent
-      if (parentStudents.length > 0) {
-        if (!selectedStudent || !isParentOf(selectedStudent)) {
-          setSelectedStudent(parentStudents[0].id);
-        }
-      } else {
-        // No students available for this parent
-        setSelectedStudent('');
-      }
-    } else if (currentUser?.role === 'admin' || currentUser?.role === 'super_admin') {
-      // Admins and super admins can see all students
-      setAvailableStudents(allStudents);
-      if (!selectedStudent && allStudents.length > 0) {
-        setSelectedStudent(allStudents[0].id);
-      }
-    } else {
-      // Not authenticated or unknown role
-      navigate('/login');
-    }
-  }, [currentUser, selectedStudent, isParentOf, navigate]);
+    fetchSubjects();
+  }, [selectedSubject]);
   
-  // Mock data for subjects
-  const subjects = [
-    { id: 'biology', name: 'Biology' },
-    { id: 'chemistry', name: 'Chemistry' },
-    { id: 'physics', name: 'Physics' }
-  ];
+  // Function to handle adding a new subject
+  const handleAddSubject = async () => {
+    if (!newSubjectName.trim()) return;
+    
+    try {
+      await axios.post('/api/subjects', { name: newSubjectName });
+      setNewSubjectName('');
+      setShowSubjectModal(false);
+      fetchSubjects();
+    } catch (err) {
+      console.error('Error adding subject:', err);
+      setError('Failed to add subject');
+    }
+  };
+  
+  // Function to handle editing a subject
+  const handleEditSubject = async () => {
+    if (!editingSubject || !newSubjectName.trim()) return;
+    
+    try {
+      await axios.put(`/api/subjects/${editingSubject._id}`, { name: newSubjectName });
+      setNewSubjectName('');
+      setEditingSubject(null);
+      setShowSubjectModal(false);
+      fetchSubjects();
+    } catch (err) {
+      console.error('Error updating subject:', err);
+      setError('Failed to update subject');
+    }
+  };
+  
+  // Function to handle deleting a subject
+  const handleDeleteSubject = async (subjectId) => {
+    if (!window.confirm('Are you sure you want to delete this subject? This will also delete all units and topics within it.')) {
+      return;
+    }
+    
+    try {
+      await axios.delete(`/api/subjects/${subjectId}`);
+      fetchSubjects();
+      if (selectedSubject === subjectId) {
+        setSelectedSubject('');
+      }
+    } catch (err) {
+      console.error('Error deleting subject:', err);
+      setError('Failed to delete subject');
+    }
+  };
+  
+  // Function to handle adding a unit to a subject
+  const handleAddUnit = async () => {
+    if (!selectedSubject || !newUnitName.trim()) return;
+    
+    try {
+      await axios.post(`/api/subjects/${selectedSubject}/units`, { name: newUnitName });
+      setNewUnitName('');
+      setShowUnitModal(false);
+      // Refresh the current subject data
+      fetchProgressData();
+    } catch (err) {
+      console.error('Error adding unit:', err);
+      setError('Failed to add unit');
+    }
+  };
+  
+  // Function to handle adding a topic to a unit
+  const handleAddTopic = async (unitId) => {
+    if (!selectedSubject || !unitId || !newTopicName.trim()) return;
+    
+    try {
+      await axios.post(`/api/subjects/${selectedSubject}/units/${unitId}/topics`, { name: newTopicName });
+      setNewTopicName('');
+      setShowTopicModal(false);
+      // Refresh the current subject data
+      fetchProgressData();
+    } catch (err) {
+      console.error('Error adding topic:', err);
+      setError('Failed to add topic');
+    }
+  };
   
   // Available status options
   const statusOptions = [
@@ -68,7 +183,7 @@ const StudentProgress = () => {
     { value: 'not_studied', label: 'Not studied' }
   ];
   
-  // Mock data for progress tracking (based on the image)
+  // State for progress data
   const [progressData, setProgressData] = useState({
     aahil: {
       biology: {
@@ -142,11 +257,65 @@ const StudentProgress = () => {
     }
   });
   
-  // Get the current student's progress data
-  const currentStudentData = progressData[selectedStudent]?.[selectedSubject] || { 
-    title: 'No data available',
-    units: [] 
+  // State for current student's progress data
+  const [currentStudentData, setCurrentStudentData] = useState({
+    title: 'Loading...',
+    units: []
+  });
+  
+  // Function to fetch progress data for selected student and subject
+  const fetchProgressData = async () => {
+    if (!selectedStudent || !selectedSubject) return;
+    
+    try {
+      setLoading(true);
+      
+      // Get subject details
+      const subjectResponse = await axios.get(`/api/subjects/${selectedSubject}`);
+      const subject = subjectResponse.data?.data || { name: 'Unknown Subject', units: [] };
+      
+      // Get progress for this student and subject
+      const progressResponse = await axios.get(`/api/progress/student/${selectedStudent}/subject/${selectedSubject}`);
+      const progressEntries = progressResponse.data;
+      
+      // Map progress data to the format expected by the UI
+      const formattedData = {
+        title: `${subject.name}`,
+        units: subject.units.map(unit => ({
+          id: unit._id,
+          name: unit.name,
+          topics: unit.topics.map(topic => {
+            // Find progress entry for this topic
+            const progressEntry = progressEntries.find(p => p.topicId === topic._id);
+            
+            return {
+              id: topic._id,
+              name: topic.name,
+              status: progressEntry ? progressEntry.status : 'not_studied'
+            };
+          })
+        }))
+      };
+      
+      setCurrentStudentData(formattedData);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching progress data:', err);
+      setError('Failed to load progress data');
+      setLoading(false);
+      
+      // Set empty data on error
+      setCurrentStudentData({
+        title: 'Error loading data',
+        units: []
+      });
+    }
   };
+  
+  // Fetch progress data when selected student or subject changes
+  useEffect(() => {
+    fetchProgressData();
+  }, [selectedStudent, selectedSubject]);
   
   // Function to get status color class
   const getStatusColorClass = (status) => {
@@ -180,23 +349,33 @@ const StudentProgress = () => {
   };
   
   // Function to save topic status changes
-  const handleSaveTopicStatus = (unitId, topicId) => {
-    // Create a deep copy of the progress data
-    const updatedProgressData = JSON.parse(JSON.stringify(progressData));
-    
-    // Find the topic and update its status
-    const unitIndex = updatedProgressData[selectedStudent][selectedSubject].units.findIndex(u => u.id === unitId);
-    const topicIndex = updatedProgressData[selectedStudent][selectedSubject].units[unitIndex].topics.findIndex(t => t.id === topicId);
-    
-    if (unitIndex !== -1 && topicIndex !== -1) {
-      updatedProgressData[selectedStudent][selectedSubject].units[unitIndex].topics[topicIndex].status = editingStatus;
-      setProgressData(updatedProgressData);
+  const handleSaveTopicStatus = async (unitId, topicId) => {
+    try {
+      // Call API to update progress
+      await axios.post('/api/progress', {
+        studentId: selectedStudent,
+        topicId: topicId,
+        status: editingStatus
+      });
+      
+      // Update local state to reflect the change
+      const updatedData = { ...currentStudentData };
+      const unitIndex = updatedData.units.findIndex(u => u.id === unitId);
+      const topicIndex = updatedData.units[unitIndex].topics.findIndex(t => t.id === topicId);
+      
+      if (unitIndex !== -1 && topicIndex !== -1) {
+        updatedData.units[unitIndex].topics[topicIndex].status = editingStatus;
+        setCurrentStudentData(updatedData);
+      }
+      
+      // Reset editing state
+      setEditingUnitId(null);
+      setEditingTopicId(null);
+      setEditingStatus('');
+    } catch (err) {
+      console.error('Error updating progress:', err);
+      alert('Failed to update progress. Please try again.');
     }
-    
-    // Reset editing state
-    setEditingUnitId(null);
-    setEditingTopicId(null);
-    setEditingStatus('');
   };
   
   // Function to cancel editing
@@ -226,6 +405,119 @@ const StudentProgress = () => {
         )}
       </div>
       
+      {/* Subject Modal */}
+      {showSubjectModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+              {editingSubject ? 'Edit Subject' : 'Add New Subject'}
+            </h2>
+            <div className="mb-4">
+              <label htmlFor="subjectName" className="block text-sm font-medium text-gray-700 mb-1">
+                Subject Name
+              </label>
+              <input
+                type="text"
+                id="subjectName"
+                value={newSubjectName}
+                onChange={(e) => setNewSubjectName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter subject name"
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowSubjectModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={editingSubject ? handleEditSubject : handleAddSubject}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
+                disabled={!newSubjectName.trim()}
+              >
+                {editingSubject ? 'Save Changes' : 'Add Subject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Unit Modal */}
+      {showUnitModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Add New Unit</h2>
+            <div className="mb-4">
+              <label htmlFor="unitName" className="block text-sm font-medium text-gray-700 mb-1">
+                Unit Name
+              </label>
+              <input
+                type="text"
+                id="unitName"
+                value={newUnitName}
+                onChange={(e) => setNewUnitName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter unit name"
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowUnitModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddUnit}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
+                disabled={!newUnitName.trim()}
+              >
+                Add Unit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Topic Modal */}
+      {showTopicModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Add New Topic</h2>
+            <div className="mb-4">
+              <label htmlFor="topicName" className="block text-sm font-medium text-gray-700 mb-1">
+                Topic Name
+              </label>
+              <input
+                type="text"
+                id="topicName"
+                value={newTopicName}
+                onChange={(e) => setNewTopicName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter topic name"
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowTopicModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleAddTopic(editingUnitId)}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
+                disabled={!newTopicName.trim()}
+              >
+                Add Topic
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         {/* Filters and Legend - Sidebar on desktop, top section on mobile */}
         <div className="lg:col-span-1 space-y-6">
@@ -249,9 +541,10 @@ const StudentProgress = () => {
                     className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-lg shadow-sm"
                     value={selectedStudent}
                     onChange={(e) => setSelectedStudent(e.target.value)}
+                    disabled={loading}
                   >
                     {availableStudents.map((student) => (
-                      <option key={student.id} value={student.id}>
+                      <option key={student._id} value={student._id}>
                         {student.name}
                       </option>
                     ))}
@@ -270,11 +563,25 @@ const StudentProgress = () => {
               )}
             </div>
             
-            {/* Subject Filter */}
+            {/* Subject Filter with Management */}
             <div>
-              <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">
-                Subject
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="subject" className="block text-sm font-medium text-gray-700">
+                  Subject
+                </label>
+                {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
+                  <button
+                    onClick={() => {
+                      setEditingSubject(null);
+                      setNewSubjectName('');
+                      setShowSubjectModal(true);
+                    }}
+                    className="text-xs text-indigo-600 hover:text-indigo-900 flex items-center"
+                  >
+                    <FaPlus className="mr-1" /> Add Subject
+                  </button>
+                )}
+              </div>
               <div className="relative">
                 <select
                   id="subject"
@@ -282,9 +589,10 @@ const StudentProgress = () => {
                   className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-lg shadow-sm"
                   value={selectedSubject}
                   onChange={(e) => setSelectedSubject(e.target.value)}
+                  disabled={loading}
                 >
                   {subjects.map((subject) => (
-                    <option key={subject.id} value={subject.id}>
+                    <option key={subject._id} value={subject._id}>
                       {subject.name}
                     </option>
                   ))}
@@ -295,6 +603,38 @@ const StudentProgress = () => {
                   </svg>
                 </div>
               </div>
+              {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && selectedSubject && (
+                <div className="mt-2 flex space-x-2">
+                  <button
+                    onClick={() => {
+                      const subject = subjects.find(s => s._id === selectedSubject);
+                      if (subject) {
+                        setEditingSubject(subject);
+                        setNewSubjectName(subject.name);
+                        setShowSubjectModal(true);
+                      }
+                    }}
+                    className="text-xs text-indigo-600 hover:text-indigo-900 flex items-center"
+                  >
+                    <FaEdit className="mr-1" /> Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteSubject(selectedSubject)}
+                    className="text-xs text-red-600 hover:text-red-900 flex items-center"
+                  >
+                    <FaTimes className="mr-1" /> Delete
+                  </button>
+                  <button
+                    onClick={() => {
+                      setNewUnitName('');
+                      setShowUnitModal(true);
+                    }}
+                    className="text-xs text-green-600 hover:text-green-900 flex items-center"
+                  >
+                    <FaPlus className="mr-1" /> Add Unit
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           
@@ -346,15 +686,29 @@ const StudentProgress = () => {
                         Unit {unit.id}: {unit.name}
                       </h3>
                       
-                      {/* Only show edit button for teachers and super admins */}
+                      {/* Only show edit buttons for teachers and super admins */}
                       {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
-                        <button 
-                          onClick={() => handleEditUnit(unit.id)}
-                          className="p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-full transition-colors"
-                          aria-label="Edit unit"
-                        >
-                          <FaEdit className="h-4 w-4" />
-                        </button>
+                        <div className="flex space-x-2">
+                          <button 
+                            onClick={() => handleEditUnit(unit.id)}
+                            className="p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-full transition-colors"
+                            aria-label="Edit unit"
+                          >
+                            <FaEdit className="h-4 w-4" />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setNewTopicName('');
+                              setShowTopicModal(true);
+                              // Store the current unit ID for adding a topic
+                              setEditingUnitId(unit.id);
+                            }}
+                            className="p-1 text-green-600 hover:text-green-900 hover:bg-green-50 rounded-full transition-colors"
+                            aria-label="Add topic"
+                          >
+                            <FaPlus className="h-4 w-4" />
+                          </button>
+                        </div>
                       )}
                     </div>
                     

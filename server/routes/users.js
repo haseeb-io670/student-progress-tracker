@@ -1,121 +1,181 @@
 import express from 'express';
 import { verifyToken, isAdmin, isSuperAdmin } from '../middleware/auth.js';
+import { User, Student } from '../models/index.js';
 
 const router = express.Router();
 
-// Mock users (will be replaced with MongoDB)
-let users = [
-  { id: '1', name: 'Super Admin', email: 'superadmin@example.com', role: 'super_admin' },
-  { id: '2', name: 'Teacher 1', email: 'teacher1@example.com', role: 'admin' },
-  { id: '3', name: 'Teacher 2', email: 'teacher2@example.com', role: 'admin' },
-  { id: '4', name: 'Parent 1', email: 'parent1@example.com', role: 'user' },
-  { id: '5', name: 'Parent 2', email: 'parent2@example.com', role: 'user' }
-];
-
 // Get all users (super_admin only)
-router.get('/', verifyToken, isSuperAdmin, (req, res) => {
-  // Return users without sensitive info
-  const safeUsers = users.map(({ password, ...user }) => user);
-  res.json(safeUsers);
+router.get('/', verifyToken, isSuperAdmin, async (req, res) => {
+  try {
+    // Return users without sensitive info
+    const users = await User.find().select('-password');
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Error fetching users' });
+  }
+});
+
+// Get current user's information
+router.get('/me', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    res.status(500).json({ message: 'Error fetching user profile' });
+  }
+});
+
+// Get current user's children (for parents)
+router.get('/me/children', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // If user is not a parent or has no children
+    if (user.role !== 'user' || !user.children || user.children.length === 0) {
+      return res.json([]);
+    }
+    
+    // Get all children details
+    const children = await Student.find({ _id: { $in: user.children } });
+    res.json(children);
+  } catch (error) {
+    console.error('Error fetching children:', error);
+    res.status(500).json({ message: 'Error fetching children' });
+  }
 });
 
 // Get user by ID
-router.get('/:id', verifyToken, (req, res) => {
-  const { id } = req.params;
-  const { userId, role } = req.user;
-  
-  // Check if user is requesting their own data or is an admin
-  if (userId !== id && role !== 'super_admin' && role !== 'admin') {
-    return res.status(403).json({ message: 'Forbidden' });
+router.get('/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { _id, role } = req.user;
+    
+    // Check if user is requesting their own data or is an admin
+    if (id !== _id.toString() && role !== 'super_admin' && role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    
+    const user = await User.findById(id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Error fetching user' });
   }
-  
-  const user = users.find(u => u.id === id);
-  
-  if (!user) {
-    return res.status(404).json({ message: 'User not found' });
-  }
-  
-  // Return user without password
-  const { password, ...userWithoutPassword } = user;
-  res.json(userWithoutPassword);
 });
 
 // Create user (admin only)
-router.post('/', verifyToken, isAdmin, (req, res) => {
-  const { name, email, password, role = 'user' } = req.body;
-  
-  // Check if email already exists
-  if (users.some(u => u.email === email)) {
-    return res.status(400).json({ message: 'Email already in use' });
+router.post('/', verifyToken, isAdmin, async (req, res) => {
+  try {
+    const { name, email, password, role = 'user', children = [] } = req.body;
+    
+    // Check if email already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Email already in use' });
+    }
+    
+    // Validate role
+    const validRoles = ['super_admin', 'admin', 'user'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+    
+    // Create new user
+    const newUser = await User.create({
+      name,
+      email,
+      password,
+      role,
+      children
+    });
+    
+    // Return user without password
+    const userResponse = newUser.toObject();
+    delete userResponse.password;
+    
+    res.status(201).json(userResponse);
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ message: 'Error creating user' });
   }
-  
-  // Create new user
-  const newUser = {
-    id: (users.length + 1).toString(),
-    name,
-    email,
-    password,
-    role
-  };
-  
-  // Add to users array
-  users.push(newUser);
-  
-  // Return user without password
-  const { password: _, ...userWithoutPassword } = newUser;
-  res.status(201).json(userWithoutPassword);
 });
 
 // Update user
-router.put('/:id', verifyToken, (req, res) => {
-  const { id } = req.params;
-  const { userId, role } = req.user;
-  
-  // Check if user is updating their own data or is an admin
-  if (userId !== id && role !== 'super_admin') {
-    return res.status(403).json({ message: 'Forbidden' });
+router.put('/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { _id, role } = req.user;
+    
+    // Check if user is updating their own data or is a super_admin
+    if (id !== _id.toString() && role !== 'super_admin') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    
+    const user = await User.findById(id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Update user
+    const { name, email, role: newRole, children } = req.body;
+    
+    // Only super_admin can change roles
+    if (newRole && newRole !== user.role && role !== 'super_admin') {
+      return res.status(403).json({ message: 'Only super admins can change user roles' });
+    }
+    
+    // Update fields
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (newRole && role === 'super_admin') user.role = newRole;
+    if (children && Array.isArray(children)) user.children = children;
+    
+    await user.save();
+    
+    // Return updated user without password
+    const userResponse = user.toObject();
+    delete userResponse.password;
+    
+    res.json(userResponse);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ message: 'Error updating user' });
   }
-  
-  const userIndex = users.findIndex(u => u.id === id);
-  
-  if (userIndex === -1) {
-    return res.status(404).json({ message: 'User not found' });
-  }
-  
-  // Update user
-  const { name, email, role: newRole } = req.body;
-  
-  // Only super_admin can change roles
-  if (newRole && newRole !== users[userIndex].role && role !== 'super_admin') {
-    return res.status(403).json({ message: 'Only super admins can change user roles' });
-  }
-  
-  users[userIndex] = {
-    ...users[userIndex],
-    name: name || users[userIndex].name,
-    email: email || users[userIndex].email,
-    role: newRole || users[userIndex].role
-  };
-  
-  // Return updated user without password
-  const { password, ...userWithoutPassword } = users[userIndex];
-  res.json(userWithoutPassword);
 });
 
 // Delete user (super_admin only)
-router.delete('/:id', verifyToken, isSuperAdmin, (req, res) => {
-  const { id } = req.params;
-  
-  const userIndex = users.findIndex(u => u.id === id);
-  
-  if (userIndex === -1) {
-    return res.status(404).json({ message: 'User not found' });
+router.delete('/:id', verifyToken, isSuperAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const user = await User.findById(id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Remove user
+    await User.findByIdAndDelete(id);
+    
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ message: 'Error deleting user' });
   }
-  
-  // Remove user
-  users = users.filter(u => u.id !== id);
-  
-  res.json({ message: 'User deleted successfully' });
 });
 
 export default router;

@@ -58,15 +58,49 @@ app.use((err, req, res, next) => {
 //   });
 // }
 
-// Import database connection
-  const conn = await mongoose.connect('mongodb+srv://haseebsajjadio670:KdF.emgr9f-24Ec@cluster0.rvhaavj.mongodb.net/') .then(() => {
-    console.log('MongoDB connected successfully');
-    app.listen(5000, () => {
-      console.log(`Server running on port ${5000}`);
-    });
-  });
+// Load environment variables
+dotenv.config();
+
 // Connect to MongoDB and start server
- 
+const startServer = async () => {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
+    console.log('MongoDB connected successfully');
+    
+    // Drop the old index that's causing the duplicate key error
+    try {
+      const collections = await mongoose.connection.db.listCollections().toArray();
+      const topicsCollection = collections.find(c => c.name === 'topics');
+      
+      if (topicsCollection) {
+        const indexes = await mongoose.connection.db.collection('topics').indexes();
+        const oldIndex = indexes.find(idx => idx.name === 'id_1_unitId_1');
+        
+        if (oldIndex) {
+          console.log('Dropping old index: id_1_unitId_1');
+          await mongoose.connection.db.collection('topics').dropIndex('id_1_unitId_1');
+          console.log('Old index dropped successfully');
+        } else {
+          console.log('Old index id_1_unitId_1 not found');
+        }
+      }
+    } catch (indexError) {
+      console.error('Error handling indexes:', indexError);
+      // Continue server startup even if index drop fails
+    }
+    
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to connect to MongoDB:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
+
 
 
 

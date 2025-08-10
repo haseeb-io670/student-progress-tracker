@@ -1,9 +1,20 @@
 import { useAuth } from '../utils/AuthContext';
 import { FaUserGraduate, FaBook, FaUsers, FaChartLine, FaCalendarAlt, FaBell } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
+  const [dashboardData, setDashboardData] = useState({
+    students: 0,
+    subjects: 0,
+    users: 0,
+    progressUpdates: 0
+  });
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   // Get role display name
   const getRoleDisplayName = (role) => {
@@ -14,13 +25,125 @@ const Dashboard = () => {
       default: return role;
     }
   };
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch dashboard statistics based on user role
+        let studentCount = 0;
+        let subjectCount = 0;
+        let userCount = 0;
+        let progressCount = 0;
+        
+        // Fetch students count
+        if (['super_admin', 'admin', 'user'].includes(currentUser?.role)) {
+          const studentsResponse = await axios.get('/api/students');
+          studentCount = studentsResponse.data.length || 0;
+        }
+        
+        // Fetch subjects count
+        if (['super_admin', 'admin'].includes(currentUser?.role)) {
+          const subjectsResponse = await axios.get('/api/subjects');
+          subjectCount = subjectsResponse.data.data?.length || 0;
+        }
+        
+        // Fetch users count (super_admin only)
+        if (currentUser?.role === 'super_admin') {
+          const usersResponse = await axios.get('/api/users');
+          userCount = usersResponse.data.length || 0;
+        }
+        
+        // Fetch progress updates count
+        if (['super_admin', 'admin'].includes(currentUser?.role)) {
+          // For admin/super_admin, get all progress updates
+          const progressResponse = await axios.get('/api/progress/recent');
+          progressCount = progressResponse.data.length || 0;
+        } else if (currentUser?.role === 'user') {
+          // For parents, get progress updates for their children
+          const childrenResponse = await axios.get('/api/users/me/children');
+          const children = childrenResponse.data || [];
+          
+          // Count progress updates for all children
+          let totalUpdates = 0;
+          for (const child of children) {
+            const progressResponse = await axios.get(`/api/progress/student/${child.id}`);
+            totalUpdates += progressResponse.data.length || 0;
+          }
+          progressCount = totalUpdates;
+        }
+        
+        setDashboardData({
+          students: studentCount,
+          subjects: subjectCount,
+          users: userCount,
+          progressUpdates: progressCount
+        });
+        
+        // Fetch recent activity
+        const activityResponse = await axios.get('/api/activity/recent');
+        setRecentActivity(activityResponse.data || []);
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        setError('Failed to load dashboard data');
+        setLoading(false);
+        
+        // Set fallback data for development
+        setRecentActivity([
+          {
+            id: 1,
+            title: 'Student progress updated',
+            description: 'Aahil - Physics - Energy changes in a system',
+            status: 'New',
+            statusColor: 'bg-green-100 text-green-800',
+            time: 'Just now',
+            icon: <FaChartLine className="h-5 w-5 text-indigo-500" />
+          },
+          {
+            id: 2,
+            title: 'New unit added',
+            description: 'Chemistry - Unit 3: Chemical Analysis',
+            status: 'New',
+            statusColor: 'bg-green-100 text-green-800',
+            time: '2 hours ago',
+            icon: <FaBook className="h-5 w-5 text-emerald-500" />
+          },
+          {
+            id: 3,
+            title: 'Student added',
+            description: 'New student Sara added to system',
+            status: 'Complete',
+            statusColor: 'bg-blue-100 text-blue-800',
+            time: 'Yesterday',
+            icon: <FaUserGraduate className="h-5 w-5 text-blue-500" />
+          },
+          {
+            id: 4,
+            title: 'Parent meeting scheduled',
+            description: 'Meeting with John\'s parents',
+            status: 'Upcoming',
+            statusColor: 'bg-yellow-100 text-yellow-800',
+            time: 'Tomorrow, 3:00 PM',
+            icon: <FaCalendarAlt className="h-5 w-5 text-yellow-500" />
+          }
+        ]);
+      }
+    };
+    
+    if (currentUser) {
+      fetchDashboardData();
+    }
+  }, [currentUser]);
   
-  // Mock data for dashboard stats
+  // Define stats based on dashboard data
   const stats = [
     {
       id: 1,
       name: 'Students',
-      value: '24',
+      value: dashboardData.students.toString(),
       icon: <FaUserGraduate className="h-6 w-6 text-white" />,
       link: '/dashboard/student-progress',
       roles: ['super_admin', 'admin', 'user'],
@@ -30,7 +153,7 @@ const Dashboard = () => {
     {
       id: 2,
       name: 'Subjects',
-      value: '12',
+      value: dashboardData.subjects.toString(),
       icon: <FaBook className="h-6 w-6 text-white" />,
       link: '/dashboard/subject-management',
       roles: ['super_admin', 'admin'],
@@ -40,7 +163,7 @@ const Dashboard = () => {
     {
       id: 3,
       name: 'Users',
-      value: '8',
+      value: dashboardData.users.toString(),
       icon: <FaUsers className="h-6 w-6 text-white" />,
       link: '/dashboard/user-management',
       roles: ['super_admin'],
@@ -50,7 +173,7 @@ const Dashboard = () => {
     {
       id: 4,
       name: 'Progress Updates',
-      value: '152',
+      value: dashboardData.progressUpdates.toString(),
       icon: <FaChartLine className="h-6 w-6 text-white" />,
       link: '/dashboard/student-progress',
       roles: ['super_admin', 'admin', 'user'],
@@ -63,46 +186,6 @@ const Dashboard = () => {
   const filteredStats = stats.filter(stat => 
     stat.roles.includes(currentUser?.role)
   );
-
-  // Recent activity data
-  const recentActivity = [
-    {
-      id: 1,
-      title: 'Student progress updated',
-      description: 'Aahil - Physics - Energy changes in a system',
-      status: 'New',
-      statusColor: 'bg-green-100 text-green-800',
-      time: 'Just now',
-      icon: <FaChartLine className="h-5 w-5 text-indigo-500" />
-    },
-    {
-      id: 2,
-      title: 'New unit added',
-      description: 'Chemistry - Unit 3: Chemical Analysis',
-      status: 'New',
-      statusColor: 'bg-green-100 text-green-800',
-      time: '2 hours ago',
-      icon: <FaBook className="h-5 w-5 text-emerald-500" />
-    },
-    {
-      id: 3,
-      title: 'Student added',
-      description: 'New student Sara added to system',
-      status: 'Complete',
-      statusColor: 'bg-blue-100 text-blue-800',
-      time: 'Yesterday',
-      icon: <FaUserGraduate className="h-5 w-5 text-blue-500" />
-    },
-    {
-      id: 4,
-      title: 'Parent meeting scheduled',
-      description: 'Meeting with John\'s parents',
-      status: 'Upcoming',
-      statusColor: 'bg-yellow-100 text-yellow-800',
-      time: 'Tomorrow, 3:00 PM',
-      icon: <FaCalendarAlt className="h-5 w-5 text-yellow-500" />
-    }
-  ];
 
   return (
     <div>
