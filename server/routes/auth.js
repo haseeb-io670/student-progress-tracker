@@ -89,11 +89,12 @@ router.post('/login', validate(loginSchema), async (req, res, next) => {
       const userData = user.toObject();
       delete userData.password;
       
-      // Send response with user data
+      // Send response with user data and token
       return res.status(200).json({
         success: true,
         data: {
-          user: userData
+          user: userData,
+          token: accessToken
         }
       });
     } catch (error) {
@@ -189,10 +190,10 @@ router.post('/register', validate(registerSchema), async (req, res, next) => {
 
     // Send response with user data and access token
     res.status(201).json({
-      status: 'success',
+      success: true,
       data: {
         user,
-        accessToken
+        token: accessToken
       }
     });
   } catch (error) {
@@ -346,7 +347,8 @@ router.post('/setup', async (req, res) => {
           email: newUser.email,
           role: newUser.role,
           children: newUser.children || []
-        }
+        },
+        token: accessToken
       }
     });
   } catch (error) {

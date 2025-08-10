@@ -20,6 +20,12 @@ const Sidebar = ({ isOpen, setIsOpen, isMobile }) => {
       roles: ['super_admin', 'admin', 'user']
     },
     {
+      name: 'Student Management',
+      path: '/dashboard/student-management',
+      icon: <FaUserGraduate className="flex-shrink-0" />,
+      roles: ['super_admin', 'admin']
+    },
+    {
       name: 'Subject Management',
       path: '/dashboard/subject-management',
       icon: <FaBook className="flex-shrink-0" />,

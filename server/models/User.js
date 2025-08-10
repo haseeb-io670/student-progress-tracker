@@ -31,7 +31,7 @@ const UserSchema = new mongoose.Schema({
     default: 'user'
   },
   children: [{
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
     ref: 'Student'
   }],
   createdAt: {

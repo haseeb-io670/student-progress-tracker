@@ -35,8 +35,13 @@ const login = async (email, password) => {
     const response = await api.post('/login', { email, password });
     
     if (response.data.success && response.data.data.token) {
+      // Store the token in localStorage
+      localStorage.setItem('token', response.data.data.token);
+      // Set the auth token in the API headers
       setAuthToken(response.data.data.token);
+      // Store the user in localStorage
       localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      console.log('User logged in and token stored');
     }
     
     return response.data;
@@ -55,8 +60,13 @@ const setup = async (userData) => {
     const response = await api.post('/setup', userData);
     
     if (response.data.success && response.data.data.token) {
+      // Store the token in localStorage
+      localStorage.setItem('token', response.data.data.token);
+      // Set the auth token in the API headers
       setAuthToken(response.data.data.token);
+      // Store the user in localStorage
       localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      console.log('User setup completed and token stored');
     }
     
     return response.data;
@@ -75,8 +85,13 @@ const register = async (userData) => {
     const response = await api.post('/register', userData);
     
     if (response.data.success && response.data.data.token) {
+      // Store the token in localStorage
+      localStorage.setItem('token', response.data.data.token);
+      // Set the auth token in the API headers
       setAuthToken(response.data.data.token);
+      // Store the user in localStorage
       localStorage.setItem('user', JSON.stringify(response.data.data.user));
+      console.log('User registered and token stored');
     }
     
     return response.data;
@@ -123,20 +138,20 @@ const getCurrentUser = async () => {
  * @returns {boolean} - True if user is logged in
  */
 const isLoggedIn = () => {
-  // Check if we have a current user stored in memory
-  return api.defaults.headers.common['Authorization'] ? true : false;
+  // Check if we have a current user stored in memory or a token in localStorage
+  return api.defaults.headers.common['Authorization'] ? true : localStorage.getItem('token') ? true : false;
 };
 
 /**
- * Get current user by making an API call
- * @returns {Promise<Object|null>} - User object or null
+ * Get current user from localStorage
+ * @returns {Object|null} - User object or null
  */
-const getUser = async () => {
+const getUser = () => {
   try {
-    const response = await api.get('/me');
-    return response.data.success ? response.data.data : null;
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
   } catch (error) {
-    console.error('Error fetching user:', error);
+    console.error('Error parsing user from localStorage:', error);
     return null;
   }
 };
@@ -148,6 +163,11 @@ const initAuth = () => {
   const token = localStorage.getItem('token');
   if (token) {
     setAuthToken(token);
+    // Also set the user in memory if available
+    const user = getUser();
+    if (user) {
+      console.log('Initializing auth with stored user:', user);
+    }
   }
 };
 

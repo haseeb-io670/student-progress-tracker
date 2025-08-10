@@ -28,11 +28,14 @@ export const AuthProvider = ({ children }) => {
               setCurrentUser(response.data);
             } else {
               // Token might be invalid, clear auth state
-              await logout();
+              console.warn('Token validation failed, but keeping user logged in with stored data');
+              // We'll keep the user logged in with the data from localStorage
+              // This prevents logout on page reload when there are server issues
             }
           } catch (err) {
             console.error('Error verifying token:', err);
             // Don't log out on network errors to allow offline usage
+            console.warn('Network error during token verification, keeping user logged in with stored data');
           }
         }
       } catch (err) {

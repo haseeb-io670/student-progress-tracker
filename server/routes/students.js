@@ -16,7 +16,7 @@ router.get('/', verifyToken, async (req, res) => {
     if (role === 'user') {
       const user = await User.findById(_id);
       if (user && user.children && user.children.length > 0) {
-        query = { id: { $in: user.children } };
+        query = { _id: { $in: user.children } };
       } else {
         return res.json([]);
       }
@@ -36,7 +36,7 @@ router.get('/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const { role, _id } = req.user;
     
-    const student = await Student.findOne({ id });
+    const student = await Student.findById(id);
     
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
@@ -45,7 +45,7 @@ router.get('/:id', verifyToken, async (req, res) => {
     // Check if user has access to this student
     if (role === 'user') {
       const user = await User.findById(_id);
-      if (!user || !user.children || !user.children.includes(student.id)) {
+      if (!user || !user.children || !user.children.includes(student._id.toString())) {
         return res.status(403).json({ message: 'Forbidden' });
       }
     }
@@ -101,7 +101,7 @@ router.put('/:id', verifyToken, isAdmin, async (req, res) => {
     const { id } = req.params;
     const { name, grade, parentId } = req.body;
     
-    const student = await Student.findOne({ id });
+    const student = await Student.findById(id);
     
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
@@ -139,7 +139,7 @@ router.delete('/:id', verifyToken, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
-    const student = await Student.findOne({ id });
+    const student = await Student.findById(id);
     
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });

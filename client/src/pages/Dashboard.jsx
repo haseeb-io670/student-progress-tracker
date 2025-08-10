@@ -82,8 +82,13 @@ const Dashboard = () => {
         });
         
         // Fetch recent activity
-        const activityResponse = await axios.get('/api/activity/recent');
+        const activityResponse = await axios.get('/api/progress/recent');
         setRecentActivity(activityResponse.data || []);
+        
+        // If no activities found, don't use mock data in production
+        if (!activityResponse.data || activityResponse.data.length === 0) {
+          setRecentActivity([]);
+        }
         
         setLoading(false);
       } catch (err) {
@@ -91,45 +96,11 @@ const Dashboard = () => {
         setError('Failed to load dashboard data');
         setLoading(false);
         
-        // Set fallback data for development
-        setRecentActivity([
-          {
-            id: 1,
-            title: 'Student progress updated',
-            description: 'Aahil - Physics - Energy changes in a system',
-            status: 'New',
-            statusColor: 'bg-green-100 text-green-800',
-            time: 'Just now',
-            icon: <FaChartLine className="h-5 w-5 text-indigo-500" />
-          },
-          {
-            id: 2,
-            title: 'New unit added',
-            description: 'Chemistry - Unit 3: Chemical Analysis',
-            status: 'New',
-            statusColor: 'bg-green-100 text-green-800',
-            time: '2 hours ago',
-            icon: <FaBook className="h-5 w-5 text-emerald-500" />
-          },
-          {
-            id: 3,
-            title: 'Student added',
-            description: 'New student Sara added to system',
-            status: 'Complete',
-            statusColor: 'bg-blue-100 text-blue-800',
-            time: 'Yesterday',
-            icon: <FaUserGraduate className="h-5 w-5 text-blue-500" />
-          },
-          {
-            id: 4,
-            title: 'Parent meeting scheduled',
-            description: 'Meeting with John\'s parents',
-            status: 'Upcoming',
-            statusColor: 'bg-yellow-100 text-yellow-800',
-            time: 'Tomorrow, 3:00 PM',
-            icon: <FaCalendarAlt className="h-5 w-5 text-yellow-500" />
-          }
-        ]);
+        // Don't set fallback mock data in production
+        setRecentActivity([]);
+        
+        // Show error message for activity section
+        setError('Failed to load recent activities');
       }
     };
     

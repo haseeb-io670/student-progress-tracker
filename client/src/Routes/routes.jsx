@@ -5,6 +5,7 @@ import Register from '../pages/Register';
 import Setup from '../pages/Setup';
 import Dashboard from '../pages/Dashboard';
 import StudentProgress from '../pages/StudentProgress';
+import StudentManagement from '../pages/StudentManagement';
 import SubjectManagement from '../pages/SubjectManagement';
 import UserManagement from '../pages/UserManagement';
 import NotFound from '../pages/NotFound';
@@ -52,6 +53,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <StudentProgress />
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'student-management',
+        element: (
+          <ProtectedRoute requiredRole={['super_admin', 'admin']}>
+            <StudentManagement />
           </ProtectedRoute>
         )
       },
