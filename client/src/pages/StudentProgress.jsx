@@ -1,14 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../utils/AuthContext';
-import { FaEdit, FaPlus, FaSave, FaTimes, FaLock, FaBook } from 'react-icons/fa';
+import { FaEdit, FaPlus, FaSave, FaTimes, FaLock, FaBook, FaExclamationCircle } from 'react-icons/fa';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+
+// Retry mechanism for failed API calls
+const retryFetch = async (fetchFunction, maxRetries = 3) => {
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      return await fetchFunction();
+    } catch (error) {
+      retries++;
+      if (retries >= maxRetries) throw error;
+      // Exponential backoff
+      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+    }
+  }
+};
 
 const StudentProgress = () => {
   const { currentUser, isParentOf } = useAuth();
   const navigate = useNavigate();
   const [selectedStudent, setSelectedStudent] = useState('');
-  const [selectedSubject, setSelectedSubject] = useState('biology');
+  const [selectedSubject, setSelectedSubject] = useState('');
   const [editingUnitId, setEditingUnitId] = useState(null);
   const [editingTopicId, setEditingTopicId] = useState(null);
   const [editingStatus, setEditingStatus] = useState('');
@@ -19,45 +34,67 @@ const StudentProgress = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // State for student modal
+  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [newStudentName, setNewStudentName] = useState('');
+  const [newStudentGrade, setNewStudentGrade] = useState('');
+  const [newStudentParentId, setNewStudentParentId] = useState('');
+  const [availableParents, setAvailableParents] = useState([]);
+  
   // Fetch students data
-  useEffect(() => {
-    const fetchStudents = async () => {
-      try {
-        setLoading(true);
-        let studentsData = [];
-        
-        if (currentUser?.role === 'user') {
-          // For parents, fetch only their children
-          const response = await axios.get('/api/users/me/children');
-          studentsData = response.data;
-        } else if (currentUser?.role === 'admin' || currentUser?.role === 'super_admin') {
-          // For admins, fetch all students
-          const response = await axios.get('/api/students');
-          studentsData = response.data;
-        } else {
-          // Not authenticated or unknown role
-          navigate('/login');
-          return;
-        }
-        
-        setAllStudents(studentsData);
-        setAvailableStudents(studentsData);
-        
-        // Set initial selected student if none is selected
-        if ((!selectedStudent || selectedStudent === '') && studentsData.length > 0) {
-          setSelectedStudent(studentsData[0]._id);
-        }
-        
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching students:', err);
-        setError('Failed to load students data');
-        setLoading(false);
+  const fetchStudents = async () => {
+    try {
+      setLoading(true);
+      let studentsData = [];
+      
+      if (currentUser?.role === 'user') {
+        // For parents, fetch only their children
+        const response = await axios.get('/api/users/me/children');
+        studentsData = response.data;
+      } else if (currentUser?.role === 'admin' || currentUser?.role === 'super_admin') {
+        // For admins, fetch all students
+        const response = await axios.get('/api/students');
+        studentsData = response.data;
+      } else {
+        // Not authenticated or unknown role
+        navigate('/login');
+        return;
       }
-    };
-    
+      
+      setAllStudents(studentsData);
+      setAvailableStudents(studentsData);
+      
+      // Set initial selected student if none is selected
+      if ((!selectedStudent || selectedStudent === '') && studentsData.length > 0) {
+        setSelectedStudent(studentsData[0]._id);
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching students:', err);
+      setError('Failed to load students data');
+      setLoading(false);
+    }
+  };
+  
+  // Fetch parents for student creation
+  const fetchParents = async () => {
+    try {
+      // Only fetch parents if user is admin or super_admin
+      if (currentUser?.role === 'admin' || currentUser?.role === 'super_admin') {
+        const response = await axios.get('/api/users?role=user');
+        setAvailableParents(response.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching parents:', err);
+      // Don't set error state here to avoid disrupting the UI
+    }
+  };
+  
+  useEffect(() => {
     if (currentUser) {
-      fetchStudents();
+      retryFetch(() => fetchStudents());
+      retryFetch(() => fetchParents());
     }
   }, [currentUser, navigate, selectedStudent]);
   
@@ -80,8 +117,16 @@ const StudentProgress = () => {
       setSubjects(subjectsData);
       
       // Set initial selected subject if none is selected
-      if (!selectedSubject && subjectsData.length > 0) {
-        setSelectedSubject(subjectsData[0]._id);
+      if ((!selectedSubject || selectedSubject === '') && subjectsData.length > 0) {
+        // Ensure we're setting a valid MongoDB ObjectId
+        const validSubject = subjectsData.find(subject => {
+          const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+          return objectIdPattern.test(subject._id);
+        });
+        
+        if (validSubject) {
+          setSelectedSubject(validSubject._id);
+        }
       }
     } catch (err) {
       console.error('Error fetching subjects:', err);
@@ -90,7 +135,7 @@ const StudentProgress = () => {
   };
   
   useEffect(() => {
-    fetchSubjects();
+    retryFetch(() => fetchSubjects());
   }, [selectedSubject]);
   
   // Function to handle adding a new subject
@@ -126,6 +171,13 @@ const StudentProgress = () => {
   
   // Function to handle deleting a subject
   const handleDeleteSubject = async (subjectId) => {
+    // Validate subject ID format
+    const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+    if (!objectIdPattern.test(subjectId)) {
+      setError('Invalid subject ID format. Cannot delete subject.');
+      return;
+    }
+    
     if (!window.confirm('Are you sure you want to delete this subject? This will also delete all units and topics within it.')) {
       return;
     }
@@ -146,6 +198,14 @@ const StudentProgress = () => {
   const handleAddUnit = async () => {
     if (!selectedSubject || !newUnitName.trim()) return;
     
+    // Validate subject ID format
+    const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+    if (!objectIdPattern.test(selectedSubject)) {
+      setError('Invalid subject ID format. Cannot add unit.');
+      setShowUnitModal(false);
+      return;
+    }
+    
     try {
       await axios.post(`/api/subjects/${selectedSubject}/units`, { name: newUnitName });
       setNewUnitName('');
@@ -161,6 +221,20 @@ const StudentProgress = () => {
   // Function to handle adding a topic to a unit
   const handleAddTopic = async (unitId) => {
     if (!selectedSubject || !unitId || !newTopicName.trim()) return;
+    
+    // Validate subject ID and unit ID format
+    const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+    if (!objectIdPattern.test(selectedSubject)) {
+      setError('Invalid subject ID format. Cannot add topic.');
+      setShowTopicModal(false);
+      return;
+    }
+    
+    if (!objectIdPattern.test(unitId)) {
+      setError('Invalid unit ID format. Cannot add topic.');
+      setShowTopicModal(false);
+      return;
+    }
     
     try {
       await axios.post(`/api/subjects/${selectedSubject}/units/${unitId}/topics`, { name: newTopicName });
@@ -264,11 +338,32 @@ const StudentProgress = () => {
   });
   
   // Function to fetch progress data for selected student and subject
+  // Enhance error handling in fetchProgressData
   const fetchProgressData = async () => {
-    if (!selectedStudent || !selectedSubject) return;
+    if (!selectedStudent || !selectedSubject) {
+      // Set empty data when no student or subject is selected
+      setCurrentStudentData({
+        title: 'Please select a student and subject',
+        units: []
+      });
+      return;
+    }
     
     try {
       setLoading(true);
+      setError(null); // Clear previous errors
+      
+      // Validate that selectedSubject is a valid MongoDB ObjectId format (24 character hex string)
+      const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+      if (!objectIdPattern.test(selectedSubject)) {
+        setError(`Invalid subject ID format: ${selectedSubject}`);
+        setCurrentStudentData({
+          title: 'Error: Invalid subject ID',
+          units: []
+        });
+        setLoading(false);
+        return;
+      }
       
       // Get subject details
       const subjectResponse = await axios.get(`/api/subjects/${selectedSubject}`);
@@ -285,8 +380,8 @@ const StudentProgress = () => {
           id: unit._id,
           name: unit.name,
           topics: unit.topics.map(topic => {
-            // Find progress entry for this topic
-            const progressEntry = progressEntries.find(p => p.topicId === topic._id);
+            // Find progress entry for this topic - using proper object ID comparison
+            const progressEntry = progressEntries.find(p => p.topicId?._id === topic._id);
             
             return {
               id: topic._id,
@@ -298,23 +393,49 @@ const StudentProgress = () => {
       };
       
       setCurrentStudentData(formattedData);
-      setLoading(false);
     } catch (err) {
       console.error('Error fetching progress data:', err);
-      setError('Failed to load progress data');
-      setLoading(false);
+      // More descriptive error message based on error type
+      if (err.response) {
+        if (err.response.status === 404) {
+          setError(`Resource not found: ${err.response.data?.message || 'Check if the student or subject exists'}`); 
+        } else if (err.response.status === 500) {
+          setError(`Server error: ${err.response.data?.message || 'Internal server error'}`); 
+        } else {
+          setError(`Error (${err.response.status}): ${err.response.data?.message || 'Unknown error'}`); 
+        }
+      } else if (err.request) {
+        setError('Network error: No response received from server');
+      } else {
+        setError(`Error: ${err.message || 'Unknown error'}`); 
+      }
       
       // Set empty data on error
       setCurrentStudentData({
         title: 'Error loading data',
         units: []
       });
+    } finally {
+      setLoading(false);
     }
   };
   
   // Fetch progress data when selected student or subject changes
   useEffect(() => {
-    fetchProgressData();
+    // Only fetch data if we have a valid subject ID
+    if (selectedSubject) {
+      const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+      if (objectIdPattern.test(selectedSubject)) {
+        retryFetch(() => fetchProgressData());
+      } else {
+        // Clear current data if subject ID is invalid
+        setCurrentStudentData({
+          title: 'Please select a valid subject',
+          units: []
+        });
+        setError('Invalid subject ID format');
+      }
+    }
   }, [selectedStudent, selectedSubject]);
   
   // Function to get status color class
@@ -352,29 +473,63 @@ const StudentProgress = () => {
   const handleSaveTopicStatus = async (unitId, topicId) => {
     try {
       // Call API to update progress
-      await axios.post('/api/progress', {
+      const response = await axios.post('/api/progress', {
         studentId: selectedStudent,
         topicId: topicId,
         status: editingStatus
       });
       
-      // Update local state to reflect the change
-      const updatedData = { ...currentStudentData };
-      const unitIndex = updatedData.units.findIndex(u => u.id === unitId);
-      const topicIndex = updatedData.units[unitIndex].topics.findIndex(t => t.id === topicId);
-      
-      if (unitIndex !== -1 && topicIndex !== -1) {
-        updatedData.units[unitIndex].topics[topicIndex].status = editingStatus;
-        setCurrentStudentData(updatedData);
+      // Verify response before updating UI
+      if (response && response.data) {
+        // Update local state to reflect the change
+        const updatedData = { ...currentStudentData };
+        const unitIndex = updatedData.units.findIndex(u => u.id === unitId);
+        const topicIndex = unitIndex !== -1 ? 
+          updatedData.units[unitIndex].topics.findIndex(t => t.id === topicId) : -1;
+        
+        if (unitIndex !== -1 && topicIndex !== -1) {
+          updatedData.units[unitIndex].topics[topicIndex].status = editingStatus;
+          setCurrentStudentData(updatedData);
+        }
+        
+        // Reset editing state
+        setEditingUnitId(null);
+        setEditingTopicId(null);
+        setEditingStatus('');
       }
-      
-      // Reset editing state
-      setEditingUnitId(null);
-      setEditingTopicId(null);
-      setEditingStatus('');
     } catch (err) {
       console.error('Error updating progress:', err);
-      alert('Failed to update progress. Please try again.');
+      
+      // Provide more specific error messages based on the error type
+      let errorMessage = 'Failed to update progress. ';
+      
+      if (err.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        if (err.response.status === 404) {
+          errorMessage += 'Student or topic not found. Please refresh the page and try again.';
+        } else if (err.response.status === 403) {
+          errorMessage += 'You do not have permission to update this progress.';
+        } else if (err.response.data && err.response.data.message) {
+          errorMessage += err.response.data.message;
+        } else {
+          errorMessage += `Server error (${err.response.status}). Please try again later.`;
+        }
+      } else if (err.request) {
+        // The request was made but no response was received
+        errorMessage += 'No response from server. Please check your internet connection.';
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        errorMessage += 'An unexpected error occurred. Please try again.';
+      }
+      
+      // Use a more user-friendly notification instead of alert
+      setError(errorMessage);
+      
+      // Clear error after 5 seconds
+      setTimeout(() => {
+        setError(null);
+      }, 5000);
     }
   };
   
@@ -391,6 +546,43 @@ const StudentProgress = () => {
     alert(`Editing unit ${unitId} - This functionality will be implemented soon.`);
   };
   
+  // Function to handle adding a new student
+  const handleAddStudent = async () => {
+    if (!newStudentName.trim()) {
+      setError('Student name is required');
+      return;
+    }
+    
+    try {
+      const studentData = {
+        name: newStudentName,
+        grade: newStudentGrade
+      };
+      
+      // Add parent ID if selected
+      if (newStudentParentId) {
+        studentData.parentId = newStudentParentId;
+      }
+      
+      // Call API to create student
+      await axios.post('/api/students', studentData);
+      
+      // Reset form and close modal
+      setNewStudentName('');
+      setNewStudentGrade('');
+      setNewStudentParentId('');
+      setShowStudentModal(false);
+      
+      // Refresh students list
+      fetchStudents();
+      
+      setError(null);
+    } catch (err) {
+      console.error('Error adding student:', err);
+      setError('Failed to add student: ' + (err.response?.data?.message || 'Unknown error'));
+    }
+  };
+  
   return (
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -398,12 +590,24 @@ const StudentProgress = () => {
         
         {/* Only show add button for teachers and super admins */}
         {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
-          <button className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200">
+          <button 
+            onClick={() => setShowStudentModal(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200">
             <FaPlus className="-ml-1 mr-2 h-4 w-4" />
             Add Student
           </button>
         )}
       </div>
+      
+      {/* Error message display */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-md shadow-sm">
+          <div className="flex items-center">
+            <FaExclamationCircle className="mr-2" />
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
       
       {/* Subject Modal */}
       {showSubjectModal && (
@@ -518,6 +722,91 @@ const StudentProgress = () => {
         </div>
       )}
       
+      {/* Student Modal */}
+      {showStudentModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Add New Student</h2>
+            
+            {error && (
+              <div className="mb-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded">
+                {error}
+              </div>
+            )}
+            
+            <div className="mb-4">
+              <label htmlFor="studentName" className="block text-sm font-medium text-gray-700 mb-1">
+                Student Name *
+              </label>
+              <input
+                type="text"
+                id="studentName"
+                value={newStudentName}
+                onChange={(e) => setNewStudentName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter student name"
+                required
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label htmlFor="studentGrade" className="block text-sm font-medium text-gray-700 mb-1">
+                Grade/Year (Optional)
+              </label>
+              <input
+                type="text"
+                id="studentGrade"
+                value={newStudentGrade}
+                onChange={(e) => setNewStudentGrade(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="Enter grade or year"
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label htmlFor="parentId" className="block text-sm font-medium text-gray-700 mb-1">
+                Parent (Optional)
+              </label>
+              <select
+                id="parentId"
+                value={newStudentParentId}
+                onChange={(e) => setNewStudentParentId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">-- Select Parent --</option>
+                {availableParents.map(parent => (
+                  <option key={parent._id} value={parent._id}>
+                    {parent.name} ({parent.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowStudentModal(false);
+                  setNewStudentName('');
+                  setNewStudentGrade('');
+                  setNewStudentParentId('');
+                  setError(null);
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddStudent}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
+                disabled={!newStudentName.trim()}
+              >
+                Add Student
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         {/* Filters and Legend - Sidebar on desktop, top section on mobile */}
         <div className="lg:col-span-1 space-y-6">
@@ -591,11 +880,19 @@ const StudentProgress = () => {
                   onChange={(e) => setSelectedSubject(e.target.value)}
                   disabled={loading}
                 >
-                  {subjects.map((subject) => (
-                    <option key={subject._id} value={subject._id}>
-                      {subject.name}
-                    </option>
-                  ))}
+                  {subjects.length === 0 && (
+                    <option value="">No subjects available</option>
+                  )}
+                  {subjects
+                    .filter(subject => {
+                      const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+                      return objectIdPattern.test(subject._id);
+                    })
+                    .map((subject) => (
+                      <option key={subject._id} value={subject._id}>
+                        {subject.name}
+                      </option>
+                    ))}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -607,11 +904,20 @@ const StudentProgress = () => {
                 <div className="mt-2 flex space-x-2">
                   <button
                     onClick={() => {
+                      // Validate subject ID format
+                      const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+                      if (!objectIdPattern.test(selectedSubject)) {
+                        setError('Invalid subject ID format. Cannot edit subject.');
+                        return;
+                      }
+                      
                       const subject = subjects.find(s => s._id === selectedSubject);
                       if (subject) {
                         setEditingSubject(subject);
                         setNewSubjectName(subject.name);
                         setShowSubjectModal(true);
+                      } else {
+                        setError('Subject not found. Cannot edit subject.');
                       }
                     }}
                     className="text-xs text-indigo-600 hover:text-indigo-900 flex items-center"

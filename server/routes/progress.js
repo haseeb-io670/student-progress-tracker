@@ -101,8 +101,13 @@ router.get('/student/:studentId', verifyToken, async (req, res) => {
     // Check if user has access to this student's progress
     if (role === 'user') {
       // Check if student belongs to this parent
-      const user = await User.findById(_id);
-      if (!user || !user.children || !user.children.includes(studentId)) {
+      const student = await Student.findById(studentId);
+      if (!student) {
+        return res.status(404).json({ message: 'Student not found' });
+      }
+      
+      // Check if this parent is associated with the student
+      if (!student.parents.includes(_id)) {
         return res.status(403).json({ message: 'Forbidden' });
       }
     }
@@ -131,8 +136,13 @@ router.get('/student/:studentId/subject/:subjectId', verifyToken, async (req, re
     // Check if user has access to this student's progress
     if (role === 'user') {
       // Check if student belongs to this parent
-      const user = await User.findById(_id);
-      if (!user || !user.children || !user.children.includes(studentId)) {
+      const student = await Student.findById(studentId);
+      if (!student) {
+        return res.status(404).json({ message: 'Student not found' });
+      }
+      
+      // Check if this parent is associated with the student
+      if (!student.parents.includes(_id)) {
         return res.status(403).json({ message: 'Forbidden' });
       }
     }
@@ -184,7 +194,7 @@ router.post('/', verifyToken, isAdmin, async (req, res) => {
     }
     
     // Check if student exists
-    const student = await Student.findOne({ id: studentId });
+    const student = await Student.findById(studentId);
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
     }
