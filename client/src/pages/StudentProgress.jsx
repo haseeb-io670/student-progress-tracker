@@ -40,6 +40,7 @@ const StudentProgress = () => {
   const [newStudentGrade, setNewStudentGrade] = useState('');
   const [newStudentParentId, setNewStudentParentId] = useState('');
   const [availableParents, setAvailableParents] = useState([]);
+  const [editingStudent, setEditingStudent] = useState(null);
   
   // Fetch students data
   const fetchStudents = async () => {
@@ -61,12 +62,19 @@ const StudentProgress = () => {
         return;
       }
       
-      setAllStudents(studentsData);
-      setAvailableStudents(studentsData);
+      // Ensure all student data has name and grade fields
+      const processedStudentData = studentsData.map(student => ({
+        ...student,
+        name: student.name || 'Unnamed Student',
+        grade: student.grade || ''
+      }));
+      
+      setAllStudents(processedStudentData);
+      setAvailableStudents(processedStudentData);
       
       // Set initial selected student if none is selected
-      if ((!selectedStudent || selectedStudent === '') && studentsData.length > 0) {
-        setSelectedStudent(studentsData[0]._id);
+      if ((!selectedStudent || selectedStudent === '') && processedStudentData.length > 0) {
+        setSelectedStudent(processedStudentData[0]._id);
       }
       
       setLoading(false);
@@ -588,6 +596,58 @@ const StudentProgress = () => {
     alert(`Editing unit ${unitId} - This functionality will be implemented soon.`);
   };
   
+  // Function to handle clicking the edit student button
+  const handleEditStudentClick = () => {
+    // Find the selected student from the available students
+    const student = availableStudents.find(s => s._id === selectedStudent);
+    if (student) {
+      setEditingStudent(student);
+      setNewStudentName(student.name || '');
+      setNewStudentGrade(student.grade || '');
+      setNewStudentParentId(student.parentId || '');
+      setShowStudentModal(true);
+    }
+  };
+
+  // Function to handle updating a student
+  const handleUpdateStudent = async () => {
+    if (!editingStudent) return;
+    
+    try {
+      const studentData = {};
+      
+      // Only include fields that can be edited
+      if (currentUser?.role === 'super_admin') {
+        // Super admin can edit all fields
+        studentData.name = newStudentName;
+        if (newStudentParentId) {
+          studentData.parentId = newStudentParentId;
+        }
+      }
+      
+      // Everyone with edit access can update the grade
+      studentData.grade = newStudentGrade;
+      
+      // Call API to update student
+      await axios.put(`/api/students/${editingStudent._id}`, studentData);
+      
+      // Reset form and close modal
+      setNewStudentName('');
+      setNewStudentGrade('');
+      setNewStudentParentId('');
+      setEditingStudent(null);
+      setShowStudentModal(false);
+      
+      // Refresh students list
+      fetchStudents();
+      
+      setError(null);
+    } catch (err) {
+      console.error('Error updating student:', err);
+      setError('Failed to update student: ' + (err.response?.data?.message || 'Unknown error'));
+    }
+  };
+  
   // Function to handle adding a new student
   const handleAddStudent = async () => {
     if (!newStudentName.trim()) {
@@ -768,7 +828,9 @@ const StudentProgress = () => {
       {showStudentModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Add New Student</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+              {editingStudent ? 'Edit Student' : 'Add New Student'}
+            </h2>
             
             {error && (
               <div className="mb-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -788,12 +850,13 @@ const StudentProgress = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Enter student name"
                 required
+                disabled={editingStudent && (currentUser?.role !== 'super_admin')}
               />
             </div>
             
             <div className="mb-4">
               <label htmlFor="studentGrade" className="block text-sm font-medium text-gray-700 mb-1">
-                Grade/Year (Optional)
+                Grade/Year {editingStudent ? '' : '(Optional)'}
               </label>
               <input
                 type="text"
@@ -814,6 +877,7 @@ const StudentProgress = () => {
                 value={newStudentParentId}
                 onChange={(e) => setNewStudentParentId(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                disabled={editingStudent && (currentUser?.role !== 'super_admin')}
               >
                 <option value="">-- Select Parent --</option>
                 {availableParents.map(parent => (
@@ -831,6 +895,7 @@ const StudentProgress = () => {
                   setNewStudentName('');
                   setNewStudentGrade('');
                   setNewStudentParentId('');
+                  setEditingStudent(null);
                   setError(null);
                 }}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md"
@@ -838,7 +903,7 @@ const StudentProgress = () => {
                 Cancel
               </button>
               <button
-                onClick={handleAddStudent}
+                onClick={editingStudent ? handleUpdateStudent : handleAddStudent}
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
                 disabled={!newStudentName.trim()}
               >
@@ -861,9 +926,19 @@ const StudentProgress = () => {
             
             {/* Student Filter */}
             <div className="mb-4">
-              <label htmlFor="student" className="block text-sm font-medium text-gray-700 mb-1">
-                Student
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="student" className="block text-sm font-medium text-gray-700">
+                  Student
+                </label>
+                {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && selectedStudent && (
+                  <button
+                    onClick={() => handleEditStudentClick()}
+                    className="text-xs text-indigo-600 hover:text-indigo-900 flex items-center"
+                  >
+                    <FaEdit className="mr-1" /> Edit Grade
+                  </button>
+                )}
+              </div>
               {availableStudents.length > 0 ? (
                 <div className="relative">
                   <select
@@ -1021,14 +1096,20 @@ const StudentProgress = () => {
         <div className="lg:col-span-3">
           <div className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-100">
             <div className="bg-gradient-to-r from-indigo-50 to-indigo-100 px-5 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {currentStudentData.title}
-                {selectedStudent && selectedSubject && (
-                  <span className="ml-2 text-sm font-normal text-gray-600">
-                    {availableStudents.find(s => s._id === selectedStudent)?.name || ''}
-                  </span>
-                )}
-              </h2>
+              {selectedStudent && (
+                <div className="text-center">
+                  <div className="border border-gray-300 mb-2">
+                    <h2 className="text-xl font-bold text-gray-900 py-2">
+                      Student Name- {availableStudents.find(s => s._id === selectedStudent)?.name || ''}
+                    </h2>
+                  </div>
+                  <div className="bg-green-200 border border-gray-300">
+                    <h3 className="text-lg font-semibold py-2">
+                      KEY STAGE {availableStudents.find(s => s._id === selectedStudent)?.grade || '4'} (AQA Combined) {currentStudentData.title}
+                    </h3>
+                  </div>
+                </div>
+              )}
             </div>
             
             {currentStudentData.units.length > 0 ? (
