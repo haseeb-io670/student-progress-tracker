@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../utils/AuthContext';
 import { FaEdit, FaPlus, FaSave, FaTimes, FaLock, FaBook, FaExclamationCircle } from 'react-icons/fa';
 import axios from 'axios';
@@ -113,13 +113,20 @@ const StudentProgress = () => {
     try {
       const response = await axios.get('/api/subjects');
       // Check if response has data property and it's an array
-      const subjectsData = response.data?.data || [];
-      setSubjects(subjectsData);
+      // The API returns either { success: true, data: [...] } or directly the array
+      const subjectsData = response.data?.data || response.data || [];
+      
+      // Log the response structure to help with debugging
+      console.log('Subjects API response:', response.data);
+      
+      // Ensure subjectsData is an array
+      const subjectsArray = Array.isArray(subjectsData) ? subjectsData : [];
+      setSubjects(subjectsArray);
       
       // Set initial selected subject if none is selected
-      if ((!selectedSubject || selectedSubject === '') && subjectsData.length > 0) {
+      if ((!selectedSubject || selectedSubject === '') && subjectsArray.length > 0) {
         // Ensure we're setting a valid MongoDB ObjectId
-        const validSubject = subjectsData.find(subject => {
+        const validSubject = subjectsArray.find(subject => {
           const objectIdPattern = /^[0-9a-fA-F]{24}$/;
           return objectIdPattern.test(subject._id);
         });
@@ -135,7 +142,16 @@ const StudentProgress = () => {
   };
   
   useEffect(() => {
-    retryFetch(() => fetchSubjects());
+    if (currentUser) {
+      retryFetch(() => fetchSubjects());
+    }
+  }, [currentUser]); // Fetch subjects when user changes
+  
+  // Also fetch subjects when selectedSubject changes
+  useEffect(() => {
+    if (selectedSubject) {
+      retryFetch(() => fetchSubjects());
+    }
   }, [selectedSubject]);
   
   // Function to handle adding a new subject
@@ -367,11 +383,22 @@ const StudentProgress = () => {
       
       // Get subject details
       const subjectResponse = await axios.get(`/api/subjects/${selectedSubject}`);
-      const subject = subjectResponse.data?.data || { name: 'Unknown Subject', units: [] };
+      
+      // Log the subject response for debugging
+      console.log('Subject API response:', subjectResponse.data);
+      
+      // Handle different response formats
+      // The API might return { success: true, data: {...} } or directly the subject object
+      const subject = subjectResponse.data?.data || subjectResponse.data || { name: 'Unknown Subject', units: [] };
+      
+      // Ensure subject has units array
+      if (!subject.units) {
+        subject.units = [];
+      }
       
       // Get progress for this student and subject
       const progressResponse = await axios.get(`/api/progress/student/${selectedStudent}/subject/${selectedSubject}`);
-      const progressEntries = progressResponse.data;
+      const progressEntries = progressResponse.data || [];
       
       // Map progress data to the format expected by the UI
       const formattedData = {
@@ -381,7 +408,7 @@ const StudentProgress = () => {
           name: unit.name,
           topics: unit.topics.map(topic => {
             // Find progress entry for this topic - using proper object ID comparison
-            const progressEntry = progressEntries.find(p => p.topicId?._id === topic._id);
+            const progressEntry = progressEntries.find(p => p.topicId?._id.toString() === topic._id.toString());
             
             return {
               id: topic._id,
@@ -395,17 +422,27 @@ const StudentProgress = () => {
       setCurrentStudentData(formattedData);
     } catch (err) {
       console.error('Error fetching progress data:', err);
+      
+      // Log detailed error information for debugging
+      console.log('Error details:', {
+        message: err.message,
+        response: err.response,
+        request: err.request
+      });
+      
       // More descriptive error message based on error type
       if (err.response) {
         if (err.response.status === 404) {
           setError(`Resource not found: ${err.response.data?.message || 'Check if the student or subject exists'}`); 
+        } else if (err.response.status === 403) {
+          setError(`Access denied: ${err.response.data?.message || 'You do not have permission to view this data'}`); 
         } else if (err.response.status === 500) {
           setError(`Server error: ${err.response.data?.message || 'Internal server error'}`); 
         } else {
           setError(`Error (${err.response.status}): ${err.response.data?.message || 'Unknown error'}`); 
         }
       } else if (err.request) {
-        setError('Network error: No response received from server');
+        setError('Network error: No response received from server. Please check your internet connection.');
       } else {
         setError(`Error: ${err.message || 'Unknown error'}`); 
       }
@@ -415,6 +452,11 @@ const StudentProgress = () => {
         title: 'Error loading data',
         units: []
       });
+      
+      // Retry fetching subjects if that might be the issue
+      if (err.response && err.response.status === 404) {
+        fetchSubjects();
+      }
     } finally {
       setLoading(false);
     }
@@ -979,93 +1021,96 @@ const StudentProgress = () => {
         <div className="lg:col-span-3">
           <div className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-100">
             <div className="bg-gradient-to-r from-indigo-50 to-indigo-100 px-5 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">{currentStudentData.title}</h2>
+              <h2 className="text-lg font-semibold text-gray-900">
+                {currentStudentData.title}
+                {selectedStudent && selectedSubject && (
+                  <span className="ml-2 text-sm font-normal text-gray-600">
+                    {availableStudents.find(s => s._id === selectedStudent)?.name || ''}
+                  </span>
+                )}
+              </h2>
             </div>
             
             {currentStudentData.units.length > 0 ? (
-              <div className="divide-y divide-gray-200">
-                {currentStudentData.units.map((unit) => (
-                  <div key={unit.id} className="p-5">
-                    <div className="flex justify-between items-center">
-                      <h3 className="text-md font-medium text-gray-900 flex items-center">
-                        <span className="w-2 h-2 bg-indigo-600 rounded-full mr-2"></span>
-                        Unit {unit.id}: {unit.name}
-                      </h3>
-                      
-                      {/* Only show edit buttons for teachers and super admins */}
-                      {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
-                        <div className="flex space-x-2">
-                          <button 
-                            onClick={() => handleEditUnit(unit.id)}
-                            className="p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-full transition-colors"
-                            aria-label="Edit unit"
-                          >
-                            <FaEdit className="h-4 w-4" />
-                          </button>
-                          <button 
-                            onClick={() => {
-                              setNewTopicName('');
-                              setShowTopicModal(true);
-                              // Store the current unit ID for adding a topic
-                              setEditingUnitId(unit.id);
-                            }}
-                            className="p-1 text-green-600 hover:text-green-900 hover:bg-green-50 rounded-full transition-colors"
-                            aria-label="Add topic"
-                          >
-                            <FaPlus className="h-4 w-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="mt-4 overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+              <div className="p-4">
+                {/* Spreadsheet-like table */}
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse border border-gray-300">
+                    <thead>
+                      <tr>
+                        <th className="border border-gray-300 bg-green-100 px-4 py-2 text-left text-sm font-medium" colSpan="2">
+                          {subjects.find(s => s._id === selectedSubject)?.name || 'Subject'}
+                        </th>
+                        <th className="border border-gray-300 bg-purple-100 px-4 py-2 text-center text-sm font-medium">
+                          RAG
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentStudentData.units.map((unit, unitIndex) => (
+                        <React.Fragment key={unit.id}>
+                          {/* Unit Row */}
                           <tr>
-                            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Topic
-                            </th>
-                            <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Status
-                            </th>
-                            {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
-                              <th scope="col" className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Actions
-                              </th>
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {unit.topics.map((topic) => (
-                            <tr key={topic.id} className="hover:bg-gray-50 transition-colors">
-                              <td className="px-4 sm:px-6 py-4 text-sm text-gray-900">
-                                <div className="max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg truncate">
-                                  {topic.name}
-                                </div>
-                              </td>
-                              <td className="px-4 sm:px-6 py-4">
-                                {editingUnitId === unit.id && editingTopicId === topic.id ? (
-                                  <select
-                                    value={editingStatus}
-                                    onChange={(e) => setEditingStatus(e.target.value)}
-                                    className="block w-full pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm"
-                                  >
-                                    {statusOptions.map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColorClass(topic.status)}`}>
-                                    {getStatusLabel(topic.status)}
+                            <td 
+                              colSpan="3" 
+                              className="border border-gray-300 bg-orange-200 px-4 py-2 text-sm font-medium"
+                            >
+                              <div className="flex justify-between items-center">
+                                <span>Unit {unit.id}: {unit.name}</span>
+                                
+                                {/* Only show edit buttons for teachers and super admins */}
+                                {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
+                                  <div className="flex space-x-2">
+                                    <button 
+                                      onClick={() => handleEditUnit(unit.id)}
+                                      className="p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-full transition-colors"
+                                      aria-label="Edit unit"
+                                    >
+                                      <FaEdit className="h-4 w-4" />
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        setNewTopicName('');
+                                        setShowTopicModal(true);
+                                        // Store the current unit ID for adding a topic
+                                        setEditingUnitId(unit.id);
+                                      }}
+                                      className="p-1 text-green-600 hover:text-green-900 hover:bg-green-50 rounded-full transition-colors"
+                                      aria-label="Add topic"
+                                    >
+                                      <FaPlus className="h-4 w-4" />
+                                    </button>
                                   </div>
                                 )}
+                              </div>
+                            </td>
+                          </tr>
+                          
+                          {/* Topic Rows */}
+                          {unit.topics.map((topic, topicIndex) => (
+                            <tr key={topic.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="border border-gray-300 px-1 py-1 text-center text-sm w-16">
+                                {unitIndex + 1}.{topicIndex + 1}
                               </td>
-                              {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
-                                <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                  {editingUnitId === unit.id && editingTopicId === topic.id ? (
-                                    <div className="flex justify-end space-x-2">
+                              <td className="border border-gray-300 px-4 py-2 text-sm">
+                                {topic.name}
+                              </td>
+                              <td className="border border-gray-300 px-2 py-2 text-center">
+                                {editingUnitId === unit.id && editingTopicId === topic.id ? (
+                                  <div className="flex items-center justify-center">
+                                    <select
+                                      value={editingStatus}
+                                      onChange={(e) => setEditingStatus(e.target.value)}
+                                      className="block w-full pl-3 pr-10 py-1 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm"
+                                    >
+                                      {statusOptions.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    
+                                    <div className="flex ml-2">
                                       <button
                                         onClick={() => handleSaveTopicStatus(unit.id, topic.id)}
                                         className="p-1 text-green-600 hover:text-green-900 hover:bg-green-50 rounded transition-colors"
@@ -1081,24 +1126,30 @@ const StudentProgress = () => {
                                         <FaTimes className="h-4 w-4" />
                                       </button>
                                     </div>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleEditTopic(unit.id, topic.id, topic.status)}
-                                      className="p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded transition-colors"
-                                      aria-label="Edit topic"
-                                    >
-                                      <FaEdit className="h-4 w-4" />
-                                    </button>
-                                  )}
-                                </td>
-                              )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center">
+                                    <div className={`w-6 h-6 rounded-sm ${getStatusColorClass(topic.status)}`}></div>
+                                    
+                                    {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
+                                      <button
+                                        onClick={() => handleEditTopic(unit.id, topic.id, topic.status)}
+                                        className="ml-2 p-1 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded transition-colors"
+                                        aria-label="Edit topic"
+                                      >
+                                        <FaEdit className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
                             </tr>
                           ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : (
               <div className="p-6 text-center">

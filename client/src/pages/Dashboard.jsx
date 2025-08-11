@@ -68,7 +68,7 @@ const Dashboard = () => {
           // Count progress updates for all children
           let totalUpdates = 0;
           for (const child of children) {
-            const progressResponse = await axios.get(`/api/progress/student/${child.id}`);
+            const progressResponse = await axios.get(`/api/progress/student/${child._id}`);
             totalUpdates += progressResponse.data.length || 0;
           }
           progressCount = totalUpdates;

@@ -84,7 +84,7 @@ router.post('/', verifyToken, isAdmin, async (req, res) => {
     // If parentId is provided, add student to parent's children array
     if (parentId) {
       await User.findByIdAndUpdate(parentId, {
-        $push: { children: id }
+        $push: { children: newStudent._id }
       });
     }
     
@@ -117,13 +117,13 @@ router.put('/:id', verifyToken, isAdmin, async (req, res) => {
     if (parentId) {
       // First remove student from any existing parent's children array
       await User.updateMany(
-        { children: id },
-        { $pull: { children: id } }
+        { children: student._id },
+        { $pull: { children: student._id } }
       );
       
       // Then add to new parent
       await User.findByIdAndUpdate(parentId, {
-        $addToSet: { children: id }
+        $addToSet: { children: student._id }
       });
     }
     
@@ -147,12 +147,12 @@ router.delete('/:id', verifyToken, isAdmin, async (req, res) => {
     
     // Remove student from any parent's children array
     await User.updateMany(
-      { children: id },
-      { $pull: { children: id } }
+      { children: student._id },
+      { $pull: { children: student._id } }
     );
     
     // Delete the student
-    await Student.deleteOne({ id });
+    await Student.deleteOne({ _id: id });
     
     res.json({ message: 'Student deleted successfully' });
   } catch (error) {

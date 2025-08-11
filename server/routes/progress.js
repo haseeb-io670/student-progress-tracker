@@ -47,6 +47,7 @@ router.get('/recent', verifyToken, async (req, res) => {
       if (!user || !user.children || user.children.length === 0) {
         return res.json([]);
       }
+      // Use the correct field for the query
       query.studentId = { $in: user.children };
     }
     
@@ -106,8 +107,14 @@ router.get('/student/:studentId', verifyToken, async (req, res) => {
         return res.status(404).json({ message: 'Student not found' });
       }
       
-      // Check if this parent is associated with the student
-      if (!student.parents.includes(_id)) {
+      // Get the parent user
+      const parent = await User.findById(_id);
+      if (!parent) {
+        return res.status(404).json({ message: 'Parent user not found' });
+      }
+      
+      // Check if this student is in the parent's children array
+      if (!parent.children.includes(studentId)) {
         return res.status(403).json({ message: 'Forbidden' });
       }
     }
@@ -141,8 +148,14 @@ router.get('/student/:studentId/subject/:subjectId', verifyToken, async (req, re
         return res.status(404).json({ message: 'Student not found' });
       }
       
-      // Check if this parent is associated with the student
-      if (!student.parents.includes(_id)) {
+      // Get the parent user
+      const parent = await User.findById(_id);
+      if (!parent) {
+        return res.status(404).json({ message: 'Parent user not found' });
+      }
+      
+      // Check if this student is in the parent's children array
+      if (!parent.children.includes(studentId)) {
         return res.status(403).json({ message: 'Forbidden' });
       }
     }
