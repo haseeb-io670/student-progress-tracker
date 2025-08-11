@@ -7,22 +7,8 @@ const router = express.Router();
 // Get all students
 router.get('/', verifyToken, async (req, res) => {
   try {
-    const { role, _id } = req.user;
-    
-    // Filter students based on user role
-    let query = {};
-    
-    // If user is a parent, only show their children
-    if (role === 'user') {
-      const user = await User.findById(_id);
-      if (user && user.children && user.children.length > 0) {
-        query = { _id: { $in: user.children } };
-      } else {
-        return res.json([]);
-      }
-    }
-    
-    const students = await Student.find(query);
+    // No filtering based on user role - all authenticated users can see all students
+    const students = await Student.find({});
     res.json(students);
   } catch (error) {
     console.error('Error fetching students:', error);
@@ -34,20 +20,11 @@ router.get('/', verifyToken, async (req, res) => {
 router.get('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { role, _id } = req.user;
     
     const student = await Student.findById(id);
     
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
-    }
-    
-    // Check if user has access to this student
-    if (role === 'user') {
-      const user = await User.findById(_id);
-      if (!user || !user.children || !user.children.includes(student._id.toString())) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
     }
     
     res.json(student);

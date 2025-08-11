@@ -48,12 +48,8 @@ const StudentProgress = () => {
       setLoading(true);
       let studentsData = [];
       
-      if (currentUser?.role === 'user') {
-        // For parents, fetch only their children
-        const response = await axios.get('/api/users/me/children');
-        studentsData = response.data;
-      } else if (currentUser?.role === 'admin' || currentUser?.role === 'super_admin') {
-        // For admins, fetch all students
+      if (currentUser?.role === 'user' || currentUser?.role === 'admin' || currentUser?.role === 'super_admin') {
+        // For all users (parents, admins, super_admins), fetch all students
         const response = await axios.get('/api/students');
         studentsData = response.data;
       } else {

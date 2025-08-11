@@ -37,19 +37,8 @@ const formatTime = (date) => {
 // Get recent progress updates
 router.get('/recent', verifyToken, async (req, res) => {
   try {
-    const { role, _id } = req.user;
-    
+    // No filtering based on user role - all authenticated users can see all progress updates
     let query = {};
-    
-    // If user is a parent, only show progress for their children
-    if (role === 'user') {
-      const user = await User.findById(_id);
-      if (!user || !user.children || user.children.length === 0) {
-        return res.json([]);
-      }
-      // Use the correct field for the query
-      query.studentId = { $in: user.children };
-    }
     
     // Get the 10 most recent progress updates
     const recentProgress = await Progress.find(query)
@@ -97,26 +86,11 @@ router.get('/recent', verifyToken, async (req, res) => {
 router.get('/student/:studentId', verifyToken, async (req, res) => {
   try {
     const { studentId } = req.params;
-    const { role, _id } = req.user;
     
-    // Check if user has access to this student's progress
-    if (role === 'user') {
-      // Check if student belongs to this parent
-      const student = await Student.findById(studentId);
-      if (!student) {
-        return res.status(404).json({ message: 'Student not found' });
-      }
-      
-      // Get the parent user
-      const parent = await User.findById(_id);
-      if (!parent) {
-        return res.status(404).json({ message: 'Parent user not found' });
-      }
-      
-      // Check if this student is in the parent's children array
-      if (!parent.children.includes(studentId)) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
+    // Check if student exists
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
     }
     
     // Get all progress entries for this student
@@ -138,26 +112,11 @@ router.get('/student/:studentId', verifyToken, async (req, res) => {
 router.get('/student/:studentId/subject/:subjectId', verifyToken, async (req, res) => {
   try {
     const { studentId, subjectId } = req.params;
-    const { role, _id } = req.user;
     
-    // Check if user has access to this student's progress
-    if (role === 'user') {
-      // Check if student belongs to this parent
-      const student = await Student.findById(studentId);
-      if (!student) {
-        return res.status(404).json({ message: 'Student not found' });
-      }
-      
-      // Get the parent user
-      const parent = await User.findById(_id);
-      if (!parent) {
-        return res.status(404).json({ message: 'Parent user not found' });
-      }
-      
-      // Check if this student is in the parent's children array
-      if (!parent.children.includes(studentId)) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
+    // Check if student exists
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
     }
     
     // Get all topics for this subject
