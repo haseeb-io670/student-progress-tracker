@@ -39,6 +39,7 @@ const StudentProgress = () => {
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentGrade, setNewStudentGrade] = useState('');
   const [newStudentParentId, setNewStudentParentId] = useState('');
+  const [newStudentSubjects, setNewStudentSubjects] = useState([]);
   const [availableParents, setAvailableParents] = useState([]);
   const [editingStudent, setEditingStudent] = useState(null);
   
@@ -58,11 +59,12 @@ const StudentProgress = () => {
         return;
       }
       
-      // Ensure all student data has name and grade fields
+      // Ensure all student data has name, grade, and subjects fields
       const processedStudentData = studentsData.map(student => ({
         ...student,
         name: student.name || 'Unnamed Student',
-        grade: student.grade || ''
+        grade: student.grade || '',
+        subjects: student.subjects || []
       }));
       
       setAllStudents(processedStudentData);
@@ -466,6 +468,32 @@ const StudentProgress = () => {
     }
   };
   
+  // Reset selected subject when student changes to ensure we only show allocated subjects
+  useEffect(() => {
+    if (selectedStudent) {
+      const student = availableStudents.find(s => s._id === selectedStudent);
+      if (student) {
+        // Check if current selected subject is allocated to this student
+        const isSubjectAllocated = student.subjects && 
+          (student.subjects.includes(selectedSubject) || 
+           student.subjects.some(s => s._id === selectedSubject || s === selectedSubject));
+        
+        if (!isSubjectAllocated) {
+          // Reset selected subject if not allocated to this student
+          if (student.subjects && student.subjects.length > 0) {
+            // Set to first allocated subject
+            const firstSubjectId = typeof student.subjects[0] === 'object' ? 
+              student.subjects[0]._id : student.subjects[0];
+            setSelectedSubject(firstSubjectId);
+          } else {
+            // Clear selected subject if no subjects allocated
+            setSelectedSubject('');
+          }
+        }
+      }
+    }
+  }, [selectedStudent, availableStudents]);
+
   // Fetch progress data when selected student or subject changes
   useEffect(() => {
     // Only fetch data if we have a valid subject ID
@@ -481,6 +509,12 @@ const StudentProgress = () => {
         });
         setError('Invalid subject ID format');
       }
+    } else {
+      // Clear current data if no subject is selected
+      setCurrentStudentData({
+        title: 'Please select a subject',
+        units: []
+      });
     }
   }, [selectedStudent, selectedSubject]);
   
@@ -601,6 +635,8 @@ const StudentProgress = () => {
       setNewStudentName(student.name || '');
       setNewStudentGrade(student.grade || '');
       setNewStudentParentId(student.parentId || '');
+      // Set selected subjects if they exist
+      setNewStudentSubjects(student.subjects || []);
       setShowStudentModal(true);
     }
   };
@@ -624,6 +660,9 @@ const StudentProgress = () => {
       // Everyone with edit access can update the grade
       studentData.grade = newStudentGrade;
       
+      // Include subjects allocation
+      studentData.subjects = newStudentSubjects;
+      
       // Call API to update student
       await axios.put(`/api/students/${editingStudent._id}`, studentData);
       
@@ -631,6 +670,7 @@ const StudentProgress = () => {
       setNewStudentName('');
       setNewStudentGrade('');
       setNewStudentParentId('');
+      setNewStudentSubjects([]);
       setEditingStudent(null);
       setShowStudentModal(false);
       
@@ -654,7 +694,8 @@ const StudentProgress = () => {
     try {
       const studentData = {
         name: newStudentName,
-        grade: newStudentGrade
+        grade: newStudentGrade,
+        subjects: newStudentSubjects
       };
       
       // Add parent ID if selected
@@ -669,6 +710,7 @@ const StudentProgress = () => {
       setNewStudentName('');
       setNewStudentGrade('');
       setNewStudentParentId('');
+      setNewStudentSubjects([]);
       setShowStudentModal(false);
       
       // Refresh students list
@@ -883,6 +925,39 @@ const StudentProgress = () => {
                 ))}
               </select>
             </div>
+
+            <div className="mb-4">
+              <label htmlFor="subjects" className="block text-sm font-medium text-gray-700 mb-1">
+                Allocated Subjects
+              </label>
+              <div className="border border-gray-300 rounded-md p-2 max-h-40 overflow-y-auto">
+                {subjects.length === 0 ? (
+                  <p className="text-sm text-gray-500">No subjects available</p>
+                ) : (
+                  subjects.map(subject => (
+                    <div key={subject._id} className="flex items-center mb-1">
+                      <input
+                        type="checkbox"
+                        id={`subject-${subject._id}`}
+                        value={subject._id}
+                        checked={newStudentSubjects.includes(subject._id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setNewStudentSubjects([...newStudentSubjects, subject._id]);
+                          } else {
+                            setNewStudentSubjects(newStudentSubjects.filter(id => id !== subject._id));
+                          }
+                        }}
+                        className="mr-2"
+                      />
+                      <label htmlFor={`subject-${subject._id}`} className="text-sm">
+                        {subject.name}
+                      </label>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
             
             <div className="flex justify-end space-x-3">
               <button
@@ -891,6 +966,7 @@ const StudentProgress = () => {
                   setNewStudentName('');
                   setNewStudentGrade('');
                   setNewStudentParentId('');
+                  setNewStudentSubjects([]);
                   setEditingStudent(null);
                   setError(null);
                 }}
@@ -903,7 +979,7 @@ const StudentProgress = () => {
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md"
                 disabled={!newStudentName.trim()}
               >
-                Add Student
+                {editingStudent ? 'Update Student' : 'Add Student'}
               </button>
             </div>
           </div>
@@ -996,16 +1072,32 @@ const StudentProgress = () => {
                   {subjects.length === 0 && (
                     <option value="">No subjects available</option>
                   )}
-                  {subjects
-                    .filter(subject => {
-                      const objectIdPattern = /^[0-9a-fA-F]{24}$/;
-                      return objectIdPattern.test(subject._id);
-                    })
-                    .map((subject) => (
-                      <option key={subject._id} value={subject._id}>
-                        {subject.name}
-                      </option>
-                    ))}
+                  {selectedStudent && availableStudents.length > 0 ? (
+                    // Get the selected student object
+                    (() => {
+                      const student = availableStudents.find(s => s._id === selectedStudent);
+                      // Filter subjects that are allocated to the student
+                      const allocatedSubjects = subjects
+                        .filter(subject => {
+                          const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+                          return objectIdPattern.test(subject._id) && 
+                                 (student?.subjects?.includes(subject._id) || 
+                                  student?.subjects?.some(s => s._id === subject._id || s === subject._id));
+                        });
+                      
+                      if (allocatedSubjects.length === 0) {
+                        return <option value="">No subjects allocated to this student</option>;
+                      }
+                      
+                      return allocatedSubjects.map((subject) => (
+                        <option key={subject._id} value={subject._id}>
+                          {subject.name}
+                        </option>
+                      ));
+                    })()
+                  ) : (
+                    <option value="">Select a student first</option>
+                  )}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                   <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -1133,7 +1225,7 @@ const StudentProgress = () => {
                               className="border border-gray-300 bg-orange-200 px-4 py-2 text-sm font-medium"
                             >
                               <div className="flex justify-between items-center">
-                                <span>Unit {unit.id}: {unit.name}</span>
+                                <span>Unit: {unit.name}</span>
                                 
                                 {/* Only show edit buttons for teachers and super admins */}
                                 {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (

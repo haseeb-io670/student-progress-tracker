@@ -37,7 +37,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 // Create student (admin only)
 router.post('/', verifyToken, isAdmin, async (req, res) => {
   try {
-    const { name, grade, parentId } = req.body;
+    const { name, grade, parentId, subjects } = req.body;
     
     if (!name) {
       return res.status(400).json({ message: 'Name is required' });
@@ -55,7 +55,8 @@ router.post('/', verifyToken, isAdmin, async (req, res) => {
     const newStudent = await Student.create({
       id,
       name,
-      grade: grade || ''
+      grade: grade || '',
+      subjects: subjects || []
     });
     
     // If parentId is provided, add student to parent's children array
@@ -76,7 +77,7 @@ router.post('/', verifyToken, isAdmin, async (req, res) => {
 router.put('/:id', verifyToken, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, grade, parentId } = req.body;
+    const { name, grade, parentId, subjects } = req.body;
     
     const student = await Student.findById(id);
     
@@ -87,6 +88,7 @@ router.put('/:id', verifyToken, isAdmin, async (req, res) => {
     // Update student fields
     if (name) student.name = name;
     if (grade) student.grade = grade;
+    if (subjects) student.subjects = subjects;
     
     await student.save();
     
