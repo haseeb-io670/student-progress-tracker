@@ -16,8 +16,11 @@ const StudentManagement = () => {
   const [newStudent, setNewStudent] = useState({
     name: '',
     grade: '',
-    parentId: ''
+    parentId: '',
+    subjects: []
   });
+  
+  const [subjects, setSubjects] = useState([]);
   
   const [availableParents, setAvailableParents] = useState([]);
   
@@ -38,6 +41,28 @@ const StudentManagement = () => {
     };
     
     fetchStudents();
+  }, []);
+  
+  // Fetch available subjects
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      try {
+        const response = await axios.get('/api/subjects');
+        // API returns {success: true, data: subjects}
+        if (response.data && response.data.success && Array.isArray(response.data.data)) {
+          setSubjects(response.data.data);
+        } else {
+          console.error('Unexpected subjects data format:', response.data);
+          setSubjects([]);
+        }
+      } catch (err) {
+        console.error('Error fetching subjects:', err);
+        // Set empty array on error
+        setSubjects([]);
+      }
+    };
+    
+    fetchSubjects();
   }, []);
   
   // Fetch available parents
@@ -67,46 +92,60 @@ const StudentManagement = () => {
   const handleAddStudent = async () => {
     if (!newStudent.name) return;
     
+    if (!newStudent.parentId) {
+      setError('Parent selection is required');
+      return;
+    }
+    
     try {
       const response = await axios.post('/api/students', {
         name: newStudent.name,
         grade: newStudent.grade,
-        parentId: newStudent.parentId || undefined
+        parentId: newStudent.parentId,
+        subjects: newStudent.subjects
       });
       
       // Add the new student to the state
       setStudents([...students, response.data]);
-      setNewStudent({ name: '', grade: '', parentId: '' });
+      setNewStudent({ name: '', grade: '', parentId: '', subjects: [] });
       setIsAddingStudent(false);
+      setError(null);
     } catch (err) {
       console.error('Error adding student:', err);
-      alert('Failed to add student. ' + (err.response?.data?.message || 'Please try again.'));
+      setError('Failed to add student. ' + (err.response?.data?.message || 'Please try again.'));
     }
   };
   
   const handleEditStudent = async () => {
     if (!selectedStudent || !newStudent.name) return;
     
+    if (!newStudent.parentId) {
+      setError('Parent selection is required');
+      return;
+    }
+    
     try {
       const studentData = {
         name: newStudent.name,
         grade: newStudent.grade,
-        parentId: newStudent.parentId || undefined
+        parentId: newStudent.parentId,
+        subjects: newStudent.subjects
       };
       
-      await axios.put(`/api/students/${selectedStudent.id}`, studentData);
+      await axios.put(`/api/students/${selectedStudent._id}`, studentData);
       
       // Update the student in the state
       setStudents(students.map(student => 
-        student.id === selectedStudent.id ? { ...student, ...studentData } : student
+        student._id === selectedStudent._id ? { ...student, ...studentData } : student
       ));
       
-      setNewStudent({ name: '', grade: '', parentId: '' });
+      setNewStudent({ name: '', grade: '', parentId: '', subjects: [] });
       setSelectedStudent(null);
       setIsEditingStudent(false);
+      setError(null);
     } catch (err) {
       console.error('Error updating student:', err);
-      alert('Failed to update student. ' + (err.response?.data?.message || 'Please try again.'));
+      setError('Failed to update student. ' + (err.response?.data?.message || 'Please try again.'));
     }
   };
   
@@ -117,11 +156,11 @@ const StudentManagement = () => {
       await axios.delete(`/api/students/${studentId}`);
       
       // Remove the student from the state
-      const updatedStudents = students.filter(student => student.id !== studentId);
+      const updatedStudents = students.filter(student => student._id !== studentId);
       setStudents(updatedStudents);
     } catch (err) {
       console.error('Error deleting student:', err);
-      alert('Failed to delete student. ' + (err.response?.data?.message || 'Please try again.'));
+      setError('Failed to delete student. ' + (err.response?.data?.message || 'Please try again.'));
     }
   };
   
@@ -130,7 +169,8 @@ const StudentManagement = () => {
     setNewStudent({
       name: student.name,
       grade: student.grade || '',
-      parentId: ''
+      parentId: student.parentId || '',
+      subjects: student.subjects || []
     });
     setIsEditingStudent(true);
     setIsAddingStudent(false);
@@ -140,7 +180,8 @@ const StudentManagement = () => {
     setIsAddingStudent(false);
     setIsEditingStudent(false);
     setSelectedStudent(null);
-    setNewStudent({ name: '', grade: '', parentId: '' });
+    setNewStudent({ name: '', grade: '', parentId: '', subjects: [] });
+    setError(null);
   };
   
   return (
@@ -153,7 +194,7 @@ const StudentManagement = () => {
               setIsAddingStudent(true);
               setIsEditingStudent(false);
               setSelectedStudent(null);
-              setNewStudent({ name: '', grade: '', parentId: '' });
+              setNewStudent({ name: '', grade: '', parentId: '', subjects: [] });
             }}
             className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center"
           >
@@ -214,7 +255,7 @@ const StudentManagement = () => {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {filteredStudents.map((student) => (
-                        <tr key={student.id}>
+                        <tr key={student._id}>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">{student.name}</div>
                           </td>
@@ -232,7 +273,7 @@ const StudentManagement = () => {
                              )}
                             {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
                               <button
-                                onClick={() => handleDeleteStudent(student.id)}
+                                onClick={() => handleDeleteStudent(student._id)}
                                 className="text-red-600 hover:text-red-900"
                               >
                                 <FaTrash className="h-5 w-5" />
@@ -291,13 +332,14 @@ const StudentManagement = () => {
             {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
               <div className="sm:col-span-3">
                 <label htmlFor="parentId" className="block text-sm font-medium text-gray-700">
-                  Parent (Optional)
+                  Parent <span className="text-red-500">*</span>
                 </label>
                 <div className="mt-1">
                   <select
                     id="parentId"
                     value={newStudent.parentId}
                     onChange={(e) => setNewStudent({ ...newStudent, parentId: e.target.value })}
+                    required
                     className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
                   >
                     <option value="">Select a parent</option>
@@ -310,6 +352,46 @@ const StudentManagement = () => {
                 </div>
               </div>
             )}
+          </div>
+          
+          <div className="sm:col-span-6 mt-4">
+            <label htmlFor="subjects" className="block text-sm font-medium text-gray-700 mb-2">
+              Allocated Subjects
+            </label>
+            <div className="border border-gray-300 rounded-md p-3 max-h-40 overflow-y-auto grid grid-cols-2 gap-2">
+              {!Array.isArray(subjects) || subjects.length === 0 ? (
+                <p className="text-sm text-gray-500 col-span-2">No subjects available</p>
+              ) : (
+                subjects.map(subject => (
+                  <div key={subject._id} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id={`subject-${subject._id}`}
+                      value={subject._id}
+                      checked={newStudent.subjects.includes(subject._id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setNewStudent({
+                            ...newStudent,
+                            subjects: [...newStudent.subjects, subject._id]
+                          });
+                        } else {
+                          setNewStudent({
+                            ...newStudent,
+                            subjects: newStudent.subjects.filter(id => id !== subject._id)
+                          });
+                        }
+                      }}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-2"
+                    />
+                    <label htmlFor={`subject-${subject._id}`} className="text-sm text-gray-700">
+                      {subject.name}
+                    </label>
+                  </div>
+                ))
+              )}
+            </div>
+            <p className="mt-1 text-sm text-gray-500">Select subjects to allocate to this student</p>
           </div>
           
           <div className="mt-6 flex justify-end space-x-3">

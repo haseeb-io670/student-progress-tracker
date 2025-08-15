@@ -51,10 +51,16 @@ UserSchema.pre('save', async function(next) {
   }
   
   try {
+    // Validate password exists and is a string
+    if (!this.password || typeof this.password !== 'string') {
+      throw new Error('Invalid password format');
+    }
+    
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {
+    console.error('Password hashing error:', error.message);
     next(error);
   }
 });

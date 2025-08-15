@@ -118,15 +118,20 @@ const StudentProgress = () => {
   const fetchSubjects = async () => {
     try {
       const response = await axios.get('/api/subjects');
-      // Check if response has data property and it's an array
-      // The API returns either { success: true, data: [...] } or directly the array
-      const subjectsData = response.data?.data || response.data || [];
       
       // Log the response structure to help with debugging
       console.log('Subjects API response:', response.data);
       
-      // Ensure subjectsData is an array
-      const subjectsArray = Array.isArray(subjectsData) ? subjectsData : [];
+      // API returns {success: true, data: subjects}
+      let subjectsArray = [];
+      if (response.data && response.data.success && Array.isArray(response.data.data)) {
+        subjectsArray = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        subjectsArray = response.data;
+      } else {
+        console.error('Unexpected subjects data format:', response.data);
+      }
+      
       setSubjects(subjectsArray);
       
       // Set initial selected subject if none is selected
@@ -691,10 +696,16 @@ const StudentProgress = () => {
       return;
     }
     
+    if (!newStudentParentId) {
+      setError('Parent selection is required');
+      return;
+    }
+    
     try {
       const studentData = {
         name: newStudentName,
         grade: newStudentGrade,
+        parentId: newStudentParentId,
         subjects: newStudentSubjects
       };
       
@@ -908,7 +919,7 @@ const StudentProgress = () => {
             
             <div className="mb-4">
               <label htmlFor="parentId" className="block text-sm font-medium text-gray-700 mb-1">
-                Parent (Optional)
+                Parent <span className="text-red-500">*</span>
               </label>
               <select
                 id="parentId"
@@ -916,6 +927,7 @@ const StudentProgress = () => {
                 onChange={(e) => setNewStudentParentId(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 disabled={editingStudent && (currentUser?.role !== 'super_admin')}
+                required
               >
                 <option value="">-- Select Parent --</option>
                 {availableParents.map(parent => (
@@ -1200,7 +1212,23 @@ const StudentProgress = () => {
               )}
             </div>
             
-            {currentStudentData.units.length > 0 ? (
+            {selectedStudent && !selectedSubject ? (
+              <div className="p-8 text-center">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 inline-block">
+                  <h3 className="text-lg font-medium text-yellow-800 mb-2">No Subjects Allocated</h3>
+                  <p className="text-yellow-700 mb-4">This student doesn't have any subjects allocated yet.</p>
+                  {(currentUser?.role === 'super_admin' || currentUser?.role === 'admin') && (
+                    <button
+                      onClick={() => handleEditStudentClick()}
+                      className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                      <FaPlus className="-ml-1 mr-2 h-4 w-4" />
+                      Allocate Subjects
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : currentStudentData.units.length > 0 ? (
               <div className="p-4">
                 {/* Spreadsheet-like table */}
                 <div className="overflow-x-auto">

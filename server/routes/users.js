@@ -19,7 +19,7 @@ router.get('/', verifyToken, isSuperAdmin, async (req, res) => {
 // Get current user's information
 router.get('/me', verifyToken, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await User.findById(req.user.userId).select('-password');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -33,7 +33,7 @@ router.get('/me', verifyToken, async (req, res) => {
 // Get current user's children (for parents)
 router.get('/me/children', verifyToken, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -56,10 +56,10 @@ router.get('/me/children', verifyToken, async (req, res) => {
 router.get('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { _id, role } = req.user;
+    const { userId, role } = req.user;
     
     // Check if user is requesting their own data or is an admin
-    if (id !== _id.toString() && role !== 'super_admin' && role !== 'admin') {
+    if (!userId || (id !== userId.toString() && role !== 'super_admin' && role !== 'admin')) {
       return res.status(403).json({ message: 'Forbidden' });
     }
     
@@ -117,21 +117,22 @@ router.post('/', verifyToken, isAdmin, async (req, res) => {
 router.put('/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { _id, role } = req.user;
+    const { userId, role } = req.user;
     
     // Check if user is updating their own data or is a super_admin
-    if (id !== _id.toString() && role !== 'super_admin') {
+    if (!userId || (id !== userId.toString() && role !== 'super_admin')) {
       return res.status(403).json({ message: 'Forbidden' });
     }
     
-    const user = await User.findById(id);
+    // Use select('+password') to include the password field which is excluded by default
+    const user = await User.findById(id).select('+password');
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
     
     // Update user
-    const { name, email, role: newRole, children } = req.body;
+    const { name, email, password, role: newRole, children } = req.body;
     
     // Only super_admin can change roles
     if (newRole && newRole !== user.role && role !== 'super_admin') {
@@ -141,19 +142,32 @@ router.put('/:id', verifyToken, async (req, res) => {
     // Update fields
     if (name) user.name = name;
     if (email) user.email = email;
+    if (password) {
+      // Validate password length before updating
+      if (password.length < 6) {
+        return res.status(400).json({ message: 'Password must be at least 6 characters' });
+      }
+      // Ensure password is properly set
+      user.password = password; // Password will be hashed by the pre-save hook
+    }
     if (newRole && role === 'super_admin') user.role = newRole;
     if (children && Array.isArray(children)) user.children = children;
     
-    await user.save();
-    
-    // Return updated user without password
-    const userResponse = user.toObject();
-    delete userResponse.password;
-    
-    res.json(userResponse);
+    try {
+      await user.save();
+      
+      // Return updated user without password
+      const userResponse = user.toObject();
+      delete userResponse.password;
+      
+      res.json(userResponse);
+    } catch (saveError) {
+      console.error('Error saving user:', saveError.message, saveError.stack);
+      return res.status(500).json({ message: 'Error saving user: ' + saveError.message });
+    }
   } catch (error) {
-    console.error('Error updating user:', error);
-    res.status(500).json({ message: 'Error updating user' });
+    console.error('Error updating user:', error.message, error.stack);
+    res.status(500).json({ message: 'Error updating user: ' + error.message });
   }
 });
 

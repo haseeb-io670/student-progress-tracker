@@ -79,9 +79,14 @@ const UserManagement = () => {
         role: newUser.role
       };
       
-      // Only include password if it was changed
+      // Only include password if it was changed and is valid
       if (newUser.password) {
-        userData.password = newUser.password;
+        // Validate password length
+        if (newUser.password.length < 6) {
+          alert('Password must be at least 6 characters');
+          return;
+        }
+        userData.password = newUser.password.trim();
       }
       
       await axios.put(`/api/users/${selectedUser._id}`, userData);
