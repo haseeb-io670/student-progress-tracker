@@ -8,8 +8,8 @@ export default defineConfig({
     allowedHosts: ['localhost', '127.0.0.1', 'client.imedia5.com', 'server.imedia5.com'],
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
+        target: 'http://sr.sosessentials.online',
+        changeOrigin: false,
       }
     }
   }
